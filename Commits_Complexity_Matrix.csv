@@ -1,0 +1,13 @@
+#,Commit Message,Proposed Name,Complexity,Hours (Min),Hours (Max),Effort,Story Points
+1,add new formats export pdf,feat: Add PDF export format functionality,Medium,4,6,Medium,5
+2,sprint3-v2,feat: Sprint 3 - Version 2 improvements,High,12,16,High,8
+3,sprint3,feat: Sprint 3 - Core features implementation,High,16,20,High,13
+4,edit & buttons,refactor: Improve button styling and functionality,Low,2,3,Low,3
+5,edit & reports,feat: Enhance reports UI and data display,Medium,6,8,Medium,5
+6,print sprint2,feat: Add print functionality for Sprint 2,Medium,5,7,Medium,5
+7,backup,chore: Backup checkpoint,Low,1,2,Low,1
+8,print,feat: Implement print feature,Medium,4,6,Medium,3
+9,Update project management,refactor: Refactor project controller for role-based access,High,10,14,High,8
+10,Merge main,chore: Merge main branch,Low,0.5,1,Low,1
+11,Initial commit,feat: Initial project setup,High,20,24,High,13
+,,TOTAL,,,85-98,Medium-High,64
