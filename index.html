@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('darkMode');
+                var dark = saved ? saved === 'enabled' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (dark) {
+                    document.documentElement.classList.add('dark-mode');
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#213c7a">
+    <title>KON Daily Progress — نظام متابعة المشاريع</title>
+    <link rel="icon" href="./img/app.ico" type="image/x-icon">
+    <link rel="preload" href="./fonts/plex-arabic-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link id="bsCss" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="./css/theme.css">
+    <link rel="stylesheet" href="./css/dashboard.css">
+    <link rel="stylesheet" href="./css/kon-theme.css">
+    <style>
+        .project-card .status-strip { height: 3px; width: 100%; background: var(--status); }
+        .project-card .card-body { padding: 0.9rem 1rem 0.75rem; }
+        .project-card .project-client { font-size: 0.78rem; }
+        .project-card .status-badge { font-size: 0.7rem; padding: 0.28rem 0.55rem; background: var(--status-soft); color: var(--status); }
+        .project-card .progress-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.85rem 0 0.7rem; }
+        .project-card .project-progress-text { font-size: 1.05rem; font-weight: 700; min-width: 2.6rem; }
+        .project-card .progress { flex: 1; height: 7px; border-radius: 999px; }
+        .project-card .progress-bar { background: var(--status) !important; }
+        .project-card .card-meta { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.65rem; }
+        .project-card .meta-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.72rem; border: 1px solid var(--line); border-radius: 8px; padding: 0.22rem 0.5rem; }
+        .project-card .date-row { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; }
+        .project-card .card-footer { padding: 0.55rem 0.85rem; }
+        .project-card .btn-details { font-size: 0.74rem; font-weight: 600; padding: 0.28rem 0.75rem; border-radius: 8px; border: 1px solid var(--line-2); }
+        .view-pane { display: none; }
+        .view-pane.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="kon-app" id="konApp">
+        <aside class="kon-rail" id="sidebarMenu">
+            <div class="kon-rail-logo">
+                <a href="./index.html" title="KON Daily Progress">
+                    <img src="./img/kon-logo.png" alt="KON General Contracting">
+                </a>
+                <button type="button" class="kon-rail-toggle desktop-only" onclick="toggleSidebar()" title="طي القائمة">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+
+            <nav aria-label="القائمة">
+                <a class="kon-nav-a active" href="#dashboard" data-view="dashboard" onclick="showView('dashboard', 'لوحة التحكم', this); return false;">
+                    <i class="fas fa-home"></i><span>لوحة التحكم</span>
+                </a>
+                <a class="kon-nav-a" href="#projects" data-view="projects" onclick="showView('projects', 'المشاريع', this); return false;">
+                    <i class="fas fa-folder"></i><span>المشاريع</span>
+                </a>
+                <a class="kon-nav-a" href="#progress" data-view="progress" onclick="showView('progress', 'تقرير التقدم', this); return false;">
+                    <i class="fas fa-list-check"></i><span>تقرير التقدم</span>
+                </a>
+                <a class="kon-nav-a" href="#issues" data-view="issues" onclick="showView('issues', 'إدارة المشاكل', this); return false;">
+                    <i class="fas fa-triangle-exclamation"></i><span>المشاكل</span>
+                </a>
+
+                <div class="kon-nav-sec">الروابط والملفات</div>
+                <a class="kon-nav-a" href="./login.html">
+                    <i class="fas fa-right-to-bracket"></i><span>شاشة تسجيل الدخول</span>
+                </a>
+                <a class="kon-nav-a" href="https://github.com/meadeheating2026-oss/daily-progress" target="_blank" rel="noopener">
+                    <i class="fab fa-github"></i><span>مستودع الكود (GitHub)</span>
+                </a>
+            </nav>
+
+            <div class="kon-rail-foot">
+                <div class="kon-who">
+                    <span class="kon-av" aria-hidden="true">A</span>
+                    <div class="kon-who-info">
+                        <b>Admin</b>
+                        <small>admin@kon-uae.com</small>
+                    </div>
+                    <a href="./login.html" class="kon-logout-btn" title="تسجيل الخروج">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <div class="kon-main" id="mainContainer">
+            <header class="kon-topbar">
+                <button type="button" class="kon-btn ghost ico kon-burger" onclick="toggleSidebar()" title="القائمة">
+                    <i class="fas fa-bars"></i>
+                </button>
+
+                <div class="kon-crumbs">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="#dashboard" onclick="showView('dashboard','لوحة التحكم',document.querySelector('[data-view=dashboard]'));return false;">الرئيسية</a></li>
+                            <li class="breadcrumb-item active" id="crumbTitle" aria-current="page">لوحة التحكم</li>
+                        </ol>
+                    </nav>
+                </div>
+
+                <div class="kon-top-r">
+                    <a class="kon-btn pri" href="#progress" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'));return false;">
+                        <i class="fas fa-calendar-day"></i>
+                        <span class="kon-top-label">التقدم اليومي</span>
+                    </a>
+                    <button type="button" id="darkModeToggle" class="kon-btn ghost ico" title="الوضع الليلي / النهاري">
+                        <i class="fas fa-moon" id="darkModeIcon"></i>
+                    </button>
+                    <div class="kon-lang" role="group" aria-label="Language">
+                        <button type="button" id="langAr" aria-pressed="true" onclick="setDir('rtl')">ع</button>
+                        <button type="button" id="langEn" aria-pressed="false" onclick="setDir('ltr')">EN</button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="kon-page main-content" id="mainContent">
+                <!-- 1. DASHBOARD VIEW -->
+                <section id="view-dashboard" class="view-pane active">
+                    <div class="dashboard-header">
+                        <div class="row align-items-center g-2">
+                            <div class="col-md-8">
+                                <h1 class="dashboard-header-title">لوحة متابعة المشاريع والإنجاز اليومي</h1>
+                                <p class="dashboard-header-subtitle mb-0">نظرة شاملة على جاهزية المشاريع، نسب الإنجاز، وأداء الفرق بهوية KON الجديدة</p>
+                            </div>
+                            <div class="col-md-4 text-md-end">
+                                <div class="date-badge">
+                                    <i class="fas fa-calendar-alt me-2"></i><span>22-11-2026</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3 col-sm-6">
+                            <div class="stats-card mb-0">
+                                <i class="fas fa-folder icon"></i>
+                                <div class="label">المشاريع النشطة</div>
+                                <div class="value">18</div>
+                                <div class="footer"><a href="#projects" onclick="showView('projects','المشاريع',document.querySelector('[data-view=projects]'));return false;">عرض المشاريع <i class="fas fa-arrow-left"></i></a></div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <div class="stats-card mb-0">
+                                <i class="fas fa-chart-line icon"></i>
+                                <div class="label">متوسط التقدم</div>
+                                <div class="value">64%</div>
+                                <div class="footer"><a href="#progress" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'));return false;">تقرير التقدم <i class="fas fa-arrow-left"></i></a></div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <div class="stats-card mb-0">
+                                <i class="fas fa-users icon"></i>
+                                <div class="label">إجمالي الموظفين</div>
+                                <div class="value">42</div>
+                                <div class="footer"><a href="#projects" onclick="showView('projects','المشاريع',document.querySelector('[data-view=projects]'));return false;">فرق العمل <i class="fas fa-arrow-left"></i></a></div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <div class="stats-card mb-0">
+                                <i class="fas fa-triangle-exclamation icon"></i>
+                                <div class="label">المشاكل المفتوحة</div>
+                                <div class="value" style="color: var(--bad) !important;">4</div>
+                                <div class="footer"><a href="#issues" onclick="showView('issues','إدارة المشاكل',document.querySelector('[data-view=issues]'));return false;">إدارة المشاكل <i class="fas fa-arrow-left"></i></a></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-folder-open me-2" style="color:var(--brand)"></i>أحدث المشاريع الجارية</span>
+                            <button class="btn btn-sm btn-primary" onclick="showView('projects','المشاريع',document.querySelector('[data-view=projects]'))">كل المشاريع</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>المشروع</th>
+                                        <th>العميل</th>
+                                        <th>الحالة</th>
+                                        <th>الإنجاز</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><b>P-A259-N19504 - Caisson Board Piles</b></td>
+                                        <td>National Contracting Company Ltd</td>
+                                        <td><span class="badge bg-primary">نشط</span></td>
+                                        <td style="min-width:150px"><div class="d-flex align-items-center gap-2"><div class="progress flex-grow-1" style="height:6px"><div class="progress-bar bg-primary" style="width:91%"></div></div><b class="small">91%</b></div></td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <button class="btn btn-sm btn-info" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))" title="عرض"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-sm btn-warning" title="تعديل"><i class="fas fa-edit"></i></button>
+                                                <button class="btn btn-sm btn-danger" title="حذف"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>P257 - N-19079-TAQA-Caisson Board Piles</b></td>
+                                        <td>ELSEWEDY POWER ELECTRICAL CONTRACTING</td>
+                                        <td><span class="badge bg-primary">نشط</span></td>
+                                        <td><div class="d-flex align-items-center gap-2"><div class="progress flex-grow-1" style="height:6px"><div class="progress-bar bg-primary" style="width:44%"></div></div><b class="small">44%</b></div></td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <button class="btn btn-sm btn-info" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))" title="عرض"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-sm btn-warning" title="تعديل"><i class="fas fa-edit"></i></button>
+                                                <button class="btn btn-sm btn-danger" title="حذف"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. PROJECTS CARDS VIEW (WITH ANIMATED MARQUEE & WORKING MODAL) -->
+                <section id="view-projects" class="view-pane">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <h4 class="mb-0"><i class="fas fa-folder me-2" style="color:var(--brand)"></i>قائمة المشاريع</h4>
+                        <button class="btn btn-primary btn-sm"><i class="fas fa-plus me-1"></i>مشروع جديد</button>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card h-100 project-card" data-project-status="active" onclick="openDemoModal('P-A-270-Bored Piling Work, UM AL QUWAIN, CAPRIOLE', 'Capriole Construction', '0%', '180', '14')">
+                                <div class="status-strip"></div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <div class="flex-grow-1 min-w-0">
+                                            <h6 class="project-title" title="P-A-270-Bored Piling Work, UM AL QUWAIN, CAPRIOLE">P-A-270-Bored Piling Work, UM AL QUWAIN, CAPRIOLE</h6>
+                                            <div class="project-client text-truncate mt-1"><i class="fas fa-building me-1 opacity-75"></i>Capriole Construction</div>
+                                        </div>
+                                        <span class="status-badge flex-shrink-0">نشط</span>
+                                    </div>
+                                    <div class="progress-row">
+                                        <span class="project-progress-text">0%</span>
+                                        <div class="progress"><div class="progress-bar" style="width: 0%"></div></div>
+                                    </div>
+                                    <div class="card-meta">
+                                        <span class="meta-chip"><i class="fas fa-tag"></i> Board Piles</span>
+                                        <span class="meta-chip"><i class="fas fa-list-ul"></i> 180 عنصر</span>
+                                        <span class="meta-chip"><i class="fas fa-sitemap"></i> 14 المشاريع الفرعية</span>
+                                    </div>
+                                    <div class="date-row">
+                                        <span><i class="far fa-calendar me-1"></i>03-11-2026</span>
+                                        <span><i class="far fa-calendar-check me-1"></i>15-02-2027</span>
+                                    </div>
+                                </div>
+                                <div class="card-footer d-flex justify-content-between align-items-center">
+                                    <button type="button" class="btn btn-details">عرض التفاصيل</button>
+                                    <div class="d-flex gap-1" onclick="event.stopPropagation()">
+                                        <button class="action-btn" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))" title="مشاهدة"><i class="fas fa-eye"></i></button>
+                                        <button class="action-btn" title="مخطط جانت"><i class="fas fa-chart-bar"></i></button>
+                                        <button class="action-btn" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))" title="التقدم"><i class="fas fa-tasks"></i></button>
+                                        <button class="action-btn" title="تعديل"><i class="fas fa-edit"></i></button>
+                                        <button class="action-btn" title="حذف"><i class="fas fa-trash-alt"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card h-100 project-card" data-project-status="active" onclick="openDemoModal('P-A-266-PILLING WORKS-BLOOM LIVING SERVICE CENTER', 'Client 01', '16%', '31', '3')">
+                                <div class="status-strip"></div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <div class="flex-grow-1 min-w-0">
+                                            <h6 class="project-title" title="P-A-266-PILLING WORKS-BLOOM LIVING SERVICE CENTER">P-A-266-PILLING WORKS-BLOOM LIVING SERVICE CENTER</h6>
+                                            <div class="project-client text-truncate mt-1"><i class="fas fa-building me-1 opacity-75"></i>Client 01</div>
+                                        </div>
+                                        <span class="status-badge flex-shrink-0">نشط</span>
+                                    </div>
+                                    <div class="progress-row">
+                                        <span class="project-progress-text">16%</span>
+                                        <div class="progress"><div class="progress-bar" style="width: 16%"></div></div>
+                                    </div>
+                                    <div class="card-meta">
+                                        <span class="meta-chip"><i class="fas fa-tag"></i> Board Piles</span>
+                                        <span class="meta-chip"><i class="fas fa-list-ul"></i> 31 عنصر</span>
+                                        <span class="meta-chip"><i class="fas fa-sitemap"></i> 3 المشاريع الفرعية</span>
+                                    </div>
+                                    <div class="date-row">
+                                        <span><i class="far fa-calendar me-1"></i>29-07-2026</span>
+                                        <span><i class="far fa-calendar-check me-1"></i>07-09-2026</span>
+                                    </div>
+                                </div>
+                                <div class="card-footer d-flex justify-content-between align-items-center">
+                                    <button type="button" class="btn btn-details">عرض التفاصيل</button>
+                                    <div class="d-flex gap-1" onclick="event.stopPropagation()">
+                                        <button class="action-btn" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))" title="مشاهدة"><i class="fas fa-eye"></i></button>
+                                        <button class="action-btn" title="مخطط جانت"><i class="fas fa-chart-bar"></i></button>
+                                        <button class="action-btn" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))" title="التقدم"><i class="fas fa-tasks"></i></button>
+                                        <button class="action-btn" title="تعديل"><i class="fas fa-edit"></i></button>
+                                        <button class="action-btn" title="حذف"><i class="fas fa-trash-alt"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card h-100 project-card" data-project-status="completed" onclick="openDemoModal('P253 - Secant Pile Shoring', 'Dubai Mass Foundation', '100%', '70', '7')">
+                                <div class="status-strip"></div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <div class="flex-grow-1 min-w-0">
+                                            <h6 class="project-title" title="P253 - Secant Pile Shoring">P253 - Secant Pile Shoring</h6>
+                                            <div class="project-client text-truncate mt-1"><i class="fas fa-building me-1 opacity-75"></i>Dubai Mass Foundation</div>
+                                        </div>
+                                        <span class="status-badge flex-shrink-0">مكتمل</span>
+                                    </div>
+                                    <div class="progress-row">
+                                        <span class="project-progress-text">100%</span>
+                                        <div class="progress"><div class="progress-bar" style="width: 100%"></div></div>
+                                    </div>
+                                    <div class="card-meta">
+                                        <span class="meta-chip"><i class="fas fa-tag"></i> Secant Pile</span>
+                                        <span class="meta-chip"><i class="fas fa-list-ul"></i> 70 عنصر</span>
+                                        <span class="meta-chip"><i class="fas fa-sitemap"></i> 7 المشاريع الفرعية</span>
+                                    </div>
+                                    <div class="date-row">
+                                        <span><i class="far fa-calendar me-1"></i>10-12-2025</span>
+                                        <span><i class="far fa-calendar-check me-1"></i>11-10-2026</span>
+                                    </div>
+                                </div>
+                                <div class="card-footer d-flex justify-content-between align-items-center">
+                                    <button type="button" class="btn btn-details">عرض التفاصيل</button>
+                                    <div class="d-flex gap-1" onclick="event.stopPropagation()">
+                                        <button class="action-btn" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))" title="مشاهدة"><i class="fas fa-eye"></i></button>
+                                        <button class="action-btn" title="مخطط جانت"><i class="fas fa-chart-bar"></i></button>
+                                        <button class="action-btn" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))" title="التقدم"><i class="fas fa-tasks"></i></button>
+                                        <button class="action-btn" title="تعديل"><i class="fas fa-edit"></i></button>
+                                        <button class="action-btn" title="حذف"><i class="fas fa-trash-alt"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. PROGRESS REPORT VIEW -->
+                <section id="view-progress" class="view-pane">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 no-print">
+                        <div>
+                            <h4 class="mb-1">تقرير التقدم</h4>
+                            <div class="text-muted small">P-A-270-Bored Piling Work, UM AL QUWAIN, CAPRIOLE — 22-Nov-2026</div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-info btn-sm" onclick="window.print()"><i class="fas fa-print me-1"></i>طباعة / PDF</button>
+                            <button class="btn btn-success btn-sm"><i class="fas fa-file-excel me-1"></i>تصدير إلى Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0 progress-table">
+                                <thead>
+                                    <tr>
+                                        <th rowspan="2" class="sl-header">SL</th>
+                                        <th rowspan="2" class="activity-header">وصف النشاط</th>
+                                        <th rowspan="2" class="totalQty-header">الكمية</th>
+                                        <th rowspan="2" class="unit-header">الوحدة</th>
+                                        <th colspan="4" class="prev-header">السابق</th>
+                                        <th colspan="4" class="curr-header">الحالي</th>
+                                        <th colspan="4" class="comp-header">مكتمل</th>
+                                        <th colspan="4" class="remaining-header">متبقي</th>
+                                        <th rowspan="2" class="start-date-header">تاريخ البدء</th>
+                                        <th rowspan="2" class="target-header">تاريخ الانتهاء</th>
+                                    </tr>
+                                    <tr>
+                                        <th>مخطط</th><th>%</th><th>فعلي</th><th>%</th>
+                                        <th>مخطط</th><th>%</th><th>فعلي</th><th>%</th>
+                                        <th>مخطط</th><th>%</th><th>فعلي</th><th>%</th>
+                                        <th>مخطط</th><th>%</th><th>متبقي</th><th>%</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="sl-cell">1</td>
+                                        <td class="activity-cell text-start">Central Pile Steel Cage fabrication</td>
+                                        <td class="quantity-cell">29.00</td>
+                                        <td class="unit-cell">NOS</td>
+                                        <td class="prev-planned">29.00</td><td class="prev-planned-percent">100%</td><td class="prev-actual">24.00</td><td class="prev-actual">83%</td>
+                                        <td class="curr-planned">0.00</td><td class="curr-planned-percent">0%</td><td class="curr-actual">2.00</td><td class="curr-actual">7%</td>
+                                        <td class="comp-planned">29.00</td><td class="comp-planned-percent">100%</td><td class="comp-actual">26.00</td><td class="comp-actual">90%</td>
+                                        <td class="remaining-planned">0.00</td><td class="remaining-planned-percent">0%</td><td class="remaining-cell">3.00</td><td class="remaining-cell">10%</td>
+                                        <td class="start-date-cell">04-Nov-26</td>
+                                        <td class="target-date-cell">09-Nov-26</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="sl-cell">2</td>
+                                        <td class="activity-cell text-start">Steel supplying &amp; cage installation</td>
+                                        <td class="quantity-cell">32.00</td>
+                                        <td class="unit-cell">TON</td>
+                                        <td class="prev-planned">16.00</td><td class="prev-planned-percent">50%</td><td class="prev-actual">16.00</td><td class="prev-actual">50%</td>
+                                        <td class="curr-planned">4.00</td><td class="curr-planned-percent">12%</td><td class="curr-actual">4.00</td><td class="curr-actual">12%</td>
+                                        <td class="comp-planned">20.00</td><td class="comp-planned-percent">62%</td><td class="comp-actual">20.00</td><td class="comp-actual">62%</td>
+                                        <td class="remaining-planned">12.00</td><td class="remaining-planned-percent">38%</td><td class="remaining-cell">12.00</td><td class="remaining-cell">38%</td>
+                                        <td class="start-date-cell">05-Nov-26</td>
+                                        <td class="target-date-cell">18-Nov-26</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. ISSUES VIEW -->
+                <section id="view-issues" class="view-pane">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="mb-0"><i class="fas fa-triangle-exclamation me-2" style="color:var(--brand)"></i>إدارة المشاكل</h4>
+                            <p class="text-muted small mb-0">إدارة مشاكل المشروع والملاحظات الميدانية</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>العنوان</th>
+                                        <th>المشروع</th>
+                                        <th>الأولوية</th>
+                                        <th>الحالة</th>
+                                        <th>مخصص لـ</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style="border-inline-start: 3px solid var(--bad);">
+                                        <td>1</td>
+                                        <td>Concrete pump shifting delay <span class="badge bg-danger ms-1">متأخر</span></td>
+                                        <td>P-A259-N19504 - Caisson Board Piles</td>
+                                        <td><span class="priority-badge bg-dark">Urgent</span></td>
+                                        <td><span class="status-badge bg-warning">In Progress</span></td>
+                                        <td>Engr. A. Elshazly</td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <button class="btn btn-sm btn-info" title="مشاهدة"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-sm btn-warning" title="تعديل"><i class="fas fa-edit"></i></button>
+                                                <button class="btn btn-sm btn-danger" title="حذف"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr style="border-inline-start: 3px solid var(--warn);">
+                                        <td>2</td>
+                                        <td>Inspection engineer comments resolved</td>
+                                        <td>P241 - Shoring &amp; Central Piles</td>
+                                        <td><span class="priority-badge bg-warning">Medium</span></td>
+                                        <td><span class="status-badge bg-success">Closed</span></td>
+                                        <td>Mahmoud Elhawary</td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <button class="btn btn-sm btn-info" title="مشاهدة"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-sm btn-warning" title="تعديل"><i class="fas fa-edit"></i></button>
+                                                <button class="btn btn-sm btn-danger" title="حذف"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Project Details Modal -->
+                <div class="modal fade" id="projectDemoModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header bg-primary">
+                                <h5 class="modal-title" id="mProjTitle">تفاصيل المشروع</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div>
+                                        <b id="mProjClient" class="text-muted"></b>
+                                    </div>
+                                    <span class="badge bg-success">نشط</span>
+                                </div>
+                                <div class="row g-3 text-center">
+                                    <div class="col-4"><div class="card p-3"><b class="fs-4" id="mProjProg">0%</b><small class="text-muted">نسبة التقدم</small></div></div>
+                                    <div class="col-4"><div class="card p-3"><b class="fs-4" id="mProjItems">0</b><small class="text-muted">بنود العمل</small></div></div>
+                                    <div class="col-4"><div class="card p-3"><b class="fs-4" id="mProjSubs">0</b><small class="text-muted">المشاريع الفرعية</small></div></div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إغلاق</button>
+                                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="showView('progress','تقرير التقدم',document.querySelector('[data-view=progress]'))">فتح تقرير التقدم</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <footer class="kon-footer">
+                <pre class="mb-0">Crafted with ❤ by KON IT TEAM</pre>
+            </footer>
+        </div>
+    </div>
+
+    <div class="kon-scrim" id="konScrim" onclick="toggleSidebar()"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function applyDarkMode(enabled) {
+            document.documentElement.classList.toggle('dark-mode', enabled);
+            document.body.classList.toggle('dark-mode', enabled);
+            document.documentElement.setAttribute('data-theme', enabled ? 'dark' : 'light');
+            localStorage.setItem('darkMode', enabled ? 'enabled' : 'disabled');
+            const icon = document.getElementById('darkModeIcon');
+            if (icon) icon.className = enabled ? 'fas fa-sun' : 'fas fa-moon';
+        }
+        document.getElementById('darkModeToggle').addEventListener('click', () => {
+            applyDarkMode(!document.documentElement.classList.contains('dark-mode'));
+        });
+        applyDarkMode(document.documentElement.classList.contains('dark-mode'));
+
+        function toggleSidebar() {
+            const app = document.getElementById('konApp');
+            const sidebar = document.getElementById('sidebarMenu');
+            const scrim = document.getElementById('konScrim');
+            if (window.innerWidth <= 900) {
+                const isOpen = sidebar.classList.toggle('open');
+                scrim.classList.toggle('on', isOpen);
+            } else {
+                const collapsed = app.classList.toggle('rail-collapsed');
+                sidebar.classList.toggle('collapsed', collapsed);
+            }
+            setTimeout(updateProjectTitleMarquees, 250);
+        }
+
+        function updateProjectTitleMarquees() {
+            document.querySelectorAll('.project-card .project-title').forEach(function(el) {
+                let track = el.querySelector('.kon-title-track');
+                if (!track) {
+                    const text = el.textContent.trim();
+                    el.textContent = '';
+                    track = document.createElement('span');
+                    track.className = 'kon-title-track';
+                    const bdi = document.createElement('bdi');
+                    bdi.textContent = text;
+                    track.appendChild(bdi);
+                    el.appendChild(track);
+                }
+                el.classList.remove('is-marquee');
+                const overflow = Math.ceil(track.offsetWidth - el.clientWidth);
+                if (overflow > 2) {
+                    const dur = Math.max(5.5, Math.min(14, 4 + overflow / 28));
+                    el.style.setProperty('--marquee-dist', (overflow + 8) + 'px');
+                    el.style.setProperty('--marquee-dur', dur.toFixed(1) + 's');
+                    el.classList.add('is-marquee');
+                }
+            });
+        }
+
+        function showView(id, title, navEl) {
+            document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById('view-' + id)?.classList.add('active');
+            document.querySelectorAll('.kon-nav-a[data-view]').forEach(a => a.classList.remove('active'));
+            if (navEl) navEl.classList.add('active');
+            document.getElementById('crumbTitle').textContent = title;
+            if (window.innerWidth <= 900) {
+                document.getElementById('sidebarMenu').classList.remove('open');
+                document.getElementById('konScrim').classList.remove('on');
+            }
+            requestAnimationFrame(updateProjectTitleMarquees);
+        }
+
+        function openDemoModal(name, client, prog, items, subs) {
+            document.getElementById('mProjTitle').textContent = name;
+            document.getElementById('mProjClient').textContent = client;
+            document.getElementById('mProjProg').textContent = prog;
+            document.getElementById('mProjItems').textContent = items;
+            document.getElementById('mProjSubs').textContent = subs;
+            new bootstrap.Modal(document.getElementById('projectDemoModal')).show();
+        }
+
+        function setDir(dir) {
+            document.documentElement.dir = dir;
+            document.documentElement.lang = dir === 'rtl' ? 'ar' : 'en';
+            document.getElementById('langAr').setAttribute('aria-pressed', dir === 'rtl');
+            document.getElementById('langEn').setAttribute('aria-pressed', dir === 'ltr');
+            document.getElementById('bsCss').href = dir === 'rtl'
+                ? 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css'
+                : 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css';
+            setTimeout(updateProjectTitleMarquees, 200);
+        }
+
+        window.addEventListener('resize', updateProjectTitleMarquees);
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateProjectTitleMarquees);
+    </script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('darkMode');
+                var dark = saved ? saved === 'enabled' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (dark) {
+                    document.documentElement.classList.add('dark-mode');
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#213c7a">
+    <title>تسجيل الدخول - KON Daily Progress</title>
+    <link rel="icon" href="./img/app.ico" type="image/x-icon">
+    <link rel="preload" href="./fonts/plex-arabic-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link id="bsCss" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="./css/theme.css">
+    <link rel="stylesheet" href="./css/kon-theme.css">
+</head>
+<body class="antialiased" style="min-height: 100vh;">
+    <div class="kon-auth">
+        <div class="kon-auth-l">
+            <div class="d-flex justify-content-between align-items-center" style="max-width: 400px; width: 100%;">
+                <img class="logo" src="./img/kon-logo.png" alt="KON General Contracting">
+                <div class="kon-lang" role="group" aria-label="Language">
+                    <button type="button" id="langAr" aria-pressed="true" onclick="setDir('rtl')">ع</button>
+                    <button type="button" id="langEn" aria-pressed="false" onclick="setDir('ltr')">EN</button>
+                </div>
+            </div>
+
+            <h1>تسجيل الدخول</h1>
+            <p class="lead">تتبع تقدم مشاريعك بكفاءة واحترافية.</p>
+
+            <form action="./index.html" method="GET" id="loginForm">
+                <label class="kon-fl" for="email">
+                    <span>البريد الإلكتروني</span>
+                    <input id="email" type="email" class="form-control ltr" value="admin@kon-uae.com" placeholder="name@kon-uae.com" required autofocus>
+                </label>
+
+                <label class="kon-fl" for="password">
+                    <span>كلمة المرور</span>
+                    <div class="kon-pw-wrap">
+                        <input id="password" type="password" class="form-control" value="password123" required>
+                        <button type="button" class="kon-pw-toggle" id="togglePassword" aria-label="Toggle password">
+                            <i class="fas fa-eye" id="toggleIcon"></i>
+                        </button>
+                    </div>
+                </label>
+
+                <div class="d-flex justify-content-between align-items-center my-1">
+                    <div class="form-check m-0">
+                        <input class="form-check-input" type="checkbox" id="remember" checked>
+                        <label class="form-check-label" for="remember" style="font-size: 13px; color: var(--ink-2);">تذكرني</label>
+                    </div>
+                    <a href="./index.html" style="font-size: 13px; text-decoration: none;">نسيت كلمة المرور؟</a>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 mt-1">دخول</button>
+            </form>
+
+            <footer class="kon-auth-foot">
+                © 2026 كن للمقاولات العامة ذ.م.م — جميع الحقوق محفوظة.<br>
+                Crafted with ❤ by KON IT TEAM
+            </footer>
+        </div>
+
+        <div class="kon-auth-r">
+            <div class="pattern"></div>
+
+            <div class="demo" aria-hidden="true">
+                <div class="demo-row">
+                    <span>تقدم المشاريع</span>
+                    <span class="segbar"><i style="--c:#4cc38d; width:92%"></i></span>
+                    <b>92%</b>
+                </div>
+                <div class="demo-row">
+                    <span>الإنجاز اليومي</span>
+                    <span class="segbar"><i style="--c:#7f9fff; width:74%"></i></span>
+                    <b>74%</b>
+                </div>
+                <div class="demo-row">
+                    <span>بنود الأعمال</span>
+                    <span class="segbar"><i style="--c:#e5a94a; width:58%"></i></span>
+                    <b>58%</b>
+                </div>
+                <div class="demo-row">
+                    <span>المتابعة والتقارير</span>
+                    <span class="segbar"><i style="--c:#f08cc1; width:45%"></i></span>
+                    <b>45%</b>
+                </div>
+            </div>
+
+            <h2>إدارة متقدمة ومتابعة دقيقة لتقدم كل مشروع.</h2>
+            <p>المشاريع، بنود الأعمال، الإنجاز اليومي، الفرق والموظفين والتقارير في مكان واحد.</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('togglePassword').addEventListener('click', () => {
+            const pw = document.getElementById('password');
+            const ic = document.getElementById('toggleIcon');
+            const t = pw.type === 'password' ? 'text' : 'password';
+            pw.type = t;
+            ic.classList.toggle('fa-eye', t === 'password');
+            ic.classList.toggle('fa-eye-slash', t === 'text');
+        });
+        function setDir(dir) {
+            document.documentElement.dir = dir;
+            document.documentElement.lang = dir === 'rtl' ? 'ar' : 'en';
+            document.getElementById('langAr').setAttribute('aria-pressed', dir === 'rtl');
+            document.getElementById('langEn').setAttribute('aria-pressed', dir === 'ltr');
+            document.getElementById('bsCss').href = dir === 'rtl'
+                ? 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css'
+                : 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css';
+        }
+    </script>
+</body>
+</html>

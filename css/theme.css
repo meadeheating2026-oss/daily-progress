@@ -1,0 +1,69 @@
+/* ========================================
+   App theme — KON Work Plan identity
+   ======================================== */
+
+:root {
+    --primary: #213c7a;
+    --primary-hover: #2d4f9c;
+    --primary-rgb: 33, 60, 122;
+    --success: #1b7f55;
+    --warning: #a96a10;
+    --danger: #bb3428;
+    --purple: #4a6cc0;
+    --theme-gradient: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+    --theme-gradient-reverse: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%);
+
+    /* Bootstrap 5 — align primary with KON Navy */
+    --bs-primary: #213c7a;
+    --bs-primary-rgb: 33, 60, 122;
+    --bs-link-color: #2d4f9c;
+    --bs-link-hover-color: #213c7a;
+}
+
+.btn-primary {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--primary);
+    --bs-btn-border-color: var(--primary);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--primary-hover);
+    --bs-btn-hover-border-color: var(--primary-hover);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--primary-hover);
+    --bs-btn-active-border-color: var(--primary-hover);
+    --bs-btn-disabled-color: #fff;
+    --bs-btn-disabled-bg: var(--primary);
+    --bs-btn-disabled-border-color: var(--primary);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--primary);
+    --bs-btn-border-color: var(--primary);
+    --bs-btn-hover-bg: var(--primary);
+    --bs-btn-hover-border-color: var(--primary);
+    --bs-btn-active-bg: var(--primary);
+    --bs-btn-active-border-color: var(--primary);
+    --bs-btn-disabled-color: var(--primary);
+    --bs-btn-disabled-border-color: var(--primary);
+}
+
+.text-primary {
+    color: var(--primary) !important;
+}
+
+.bg-primary {
+    background-color: var(--primary) !important;
+}
+
+.border-primary {
+    border-color: var(--primary) !important;
+}
+
+.table-primary {
+    --bs-table-bg: rgba(var(--primary-rgb), 0.1);
+    --bs-table-color: #121c30;
+    --bs-table-border-color: rgba(var(--primary-rgb), 0.18);
+}
+
+.badge.bg-primary {
+    background-color: var(--primary) !important;
+}
