@@ -127,6 +127,42 @@ class Project extends Model
     }
 
     /**
+     * هل المشروع يحتوي على مشاريع فرعية لم تكتمل أوزانها إلى 100% (أو أوزانها 0%)؟
+     */
+    public function getSubprojectsWeightStatusAttribute(): array
+    {
+        $items = $this->relationLoaded('items') ? $this->items : $this->items()->select('id', 'project_id', 'subproject_name')->get();
+        $subprojects = $this->relationLoaded('subprojects') ? $this->subprojects : $this->subprojects()->get();
+
+        $namesWithItems = $items->pluck('subproject_name')->filter(fn($n) => !empty($n))->unique()->values()->all();
+        if (empty($namesWithItems)) {
+            return [
+                'has_subprojects' => false,
+                'total_weight'    => 0.0,
+                'is_zero'         => false,
+                'is_incomplete'   => false,
+            ];
+        }
+
+        $withoutName = __('general.without_subproject');
+        $hasUnassigned = $items->contains(fn($it) => empty($it->subproject_name));
+
+        $activeSubprojects = $subprojects->filter(function ($sp) use ($namesWithItems, $hasUnassigned, $withoutName) {
+            return in_array($sp->name, $namesWithItems, true)
+                || ($hasUnassigned && $sp->name === $withoutName);
+        });
+
+        $totalWeight = round((float) $activeSubprojects->sum(fn($sp) => (float) ($sp->weight ?? 0)), 2);
+
+        return [
+            'has_subprojects' => true,
+            'total_weight'    => $totalWeight,
+            'is_zero'         => $totalWeight <= 0.0,
+            'is_incomplete'   => abs($totalWeight - 100.0) > 0.01,
+        ];
+    }
+
+    /**
      * Scope for active projects
      */
     public function scopeActive($query)

@@ -15,7 +15,7 @@ class ProjectSubprojectController extends Controller
     ) {}
 
     /**
-     * جلب المشاريع الفرعية مع نسبة الإنجاز
+     * جلب المشاريع الفرعية مع نسبة الإنجاز الموحدة (سقف 100% لكل بند قابل للقياس)
      */
     public function getSubprojects(Project $project)
     {
@@ -25,71 +25,80 @@ class ProjectSubprojectController extends Controller
                 'subprojects',
             ]);
 
-            $subprojectsWithItems = $this->subprojectService->getSubprojectsWithItems($project);
+            $subprojectsWithItems  = $this->subprojectService->getSubprojectsWithItems($project);
             $withoutSubprojectName = __('general.without_subproject');
 
             $today            = Carbon::today();
             $projectStartDate = $project->start_date ? Carbon::parse($project->start_date) : $today;
-            $projectEndDate   = $project->end_date ? Carbon::parse($project->end_date) : $today->copy()->addMonth();
             $weeklyHolidays   = $project->weekly_holidays ? explode(',', $project->weekly_holidays) : [];
 
             $subprojects = $subprojectsWithItems->map(function ($subproject) use (
-                $project, $withoutSubprojectName, $today, $projectStartDate, $projectEndDate, $weeklyHolidays
+                $project, $withoutSubprojectName, $today, $projectStartDate, $weeklyHolidays
             ) {
-                $isVirtual = ($subproject->name === $withoutSubprojectName && ($subproject->id === null || !isset($subproject->id)));
+                $isWithoutBucket = ($subproject->name === $withoutSubprojectName);
 
-                $allItems = $isVirtual
+                $allItems = $isWithoutBucket
                     ? $project->items->filter(fn($item) => empty($item->subproject_name))->values()
                     : $project->items->where('subproject_name', $subproject->name)->values();
 
-                $measurableItems   = $allItems->filter(fn($item) => $item->is_measurable ?? false);
-                $totalQuantity     = $measurableItems->sum('total_quantity');
-                $completedQuantity = $measurableItems->sum('completed_quantity');
-                $progress          = $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100, 2) : 0;
+                $measurableItems = $allItems->filter(fn($item) => (bool) ($item->is_measurable ?? false));
 
-                // نسبة الإنجاز بحد أقصى 100%
-                $completedQuantityUnder100 = $measurableItems->sum(function ($item) {
-                    $itemProgress = ($item->total_quantity ?? 0) > 0
-                        ? (($item->completed_quantity ?? 0) / $item->total_quantity) * 100
-                        : 0;
-                    return $itemProgress > 100 ? $item->total_quantity : $item->completed_quantity ?? 0;
-                });
+                $totalQuantity = round((float) $measurableItems->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0))), 2);
+                $rawCompletedQuantity = round((float) $measurableItems->sum(fn($it) => max(0, (float) ($it->completed_quantity ?? 0))), 2);
 
-                $progressUnder100 = $totalQuantity > 0
-                    ? round(($completedQuantityUnder100 / $totalQuantity) * 100, 2)
-                    : 0;
+                // إيقاف مساهمة أي بند عند سقف 100% من كميته الكلية (حتى لا تغطي الزيادة في بند على بند آخر لم يُنفذ)
+                $cappedCompletedQuantity = round((float) $measurableItems->sum(function ($item) {
+                    $tot  = max(0, (float) ($item->total_quantity ?? 0));
+                    $comp = max(0, (float) ($item->completed_quantity ?? 0));
+                    return min($comp, $tot);
+                }), 2);
 
-                // التقدم المخطط
-                $plannedTotalQty = 0;
+                $progress = $totalQuantity > 0
+                    ? round(($cappedCompletedQuantity / $totalQuantity) * 100, 2)
+                    : 0.0;
+
+                $rawProgress = $totalQuantity > 0
+                    ? round(($rawCompletedQuantity / $totalQuantity) * 100, 2)
+                    : 0.0;
+
+                // التقدم المخطط (سقف 100% لكل بند)
+                $plannedTotalQty = 0.0;
                 foreach ($measurableItems as $item) {
                     $itemStartDate   = $item->start_date ? Carbon::parse($item->start_date) : $projectStartDate;
-                    $dailyPlannedQty = $item->estimated_daily_qty ?? 0;
+                    $dailyPlannedQty = (float) ($item->estimated_daily_qty ?? 0);
 
                     if ($today->gte($itemStartDate)) {
                         $workingDays      = $this->calculateWorkingDays($itemStartDate, $today, $weeklyHolidays);
                         $plannedTotalQty += $dailyPlannedQty > 0
-                            ? min($workingDays * $dailyPlannedQty, $item->total_quantity)
-                            : 0;
+                            ? min($workingDays * $dailyPlannedQty, max(0, (float) ($item->total_quantity ?? 0)))
+                            : 0.0;
                     }
                 }
+                $plannedTotalQty = round($plannedTotalQty, 2);
 
                 $plannedProgress = $totalQuantity > 0
-                    ? min(100, round(($plannedTotalQty / $totalQuantity) * 100, 2))
-                    : 0;
+                    ? min(100.0, round(($plannedTotalQty / $totalQuantity) * 100, 2))
+                    : 0.0;
 
                 $itemsList = $allItems->map(function ($item) {
                     try {
                         $workItem = $item->workItem;
+                        $tot  = round(max(0, (float) ($item->total_quantity ?? 0)), 2);
+                        $comp = round(max(0, (float) ($item->completed_quantity ?? 0)), 2);
+                        $cappedComp = min($comp, $tot);
+                        $itemPct = $tot > 0 ? round(($cappedComp / $tot) * 100, 2) : 0.0;
+                        $rawPct  = $tot > 0 ? round(($comp / $tot) * 100, 2) : 0.0;
+
                         return [
-                            'id'                 => $item->id,
-                            'name'               => $workItem ? $workItem->name : ($item->item_label ?? 'Unknown Item'),
-                            'is_measurable'      => $item->is_measurable ?? false,
-                            'total_quantity'     => $item->total_quantity ?? 0,
-                            'completed_quantity' => $item->completed_quantity ?? 0,
-                            'unit'               => $workItem ? ($workItem->unit ?? '') : '',
-                            'progress'           => ($item->total_quantity ?? 0) > 0
-                                ? round((($item->completed_quantity ?? 0) / $item->total_quantity) * 100, 2)
-                                : 0,
+                            'id'                      => $item->id,
+                            'name'                    => $workItem ? $workItem->name : ($item->item_label ?? 'Unknown Item'),
+                            'is_measurable'           => (bool) ($item->is_measurable ?? false),
+                            'total_quantity'          => $tot,
+                            'completed_quantity'      => $comp,
+                            'capped_completed'        => $cappedComp,
+                            'unit'                    => $workItem ? ($workItem->unit ?? '') : '',
+                            'progress'                => $itemPct,
+                            'raw_progress'            => $rawPct,
                         ];
                     } catch (\Exception $e) {
                         Log::error('Error processing item in subproject', ['item_id' => $item->id ?? null, 'error' => $e->getMessage()]);
@@ -97,30 +106,48 @@ class ProjectSubprojectController extends Controller
                     }
                 })->filter()->values();
 
-                $weight = (float) ($subproject->weight ?? 0);
+                $weight = round((float) ($subproject->weight ?? 0), 2);
+                $weightedProgress = round($progress * ($weight / 100), 2);
+                $plannedWeightedProgress = round($plannedProgress * ($weight / 100), 2);
 
                 return [
-                    'id'                             => $subproject->id ?? null,
-                    'name'                           => $subproject->name ?? $withoutSubprojectName,
-                    'weight'                         => $weight,
-                    'progress'                       => $progress,
-                    'progress_under_100'             => $progressUnder100,
-                    'weighted_progress'              => round($progress * ($weight / 100), 2),
-                    'weighted_progress_under_100'    => round($progressUnder100 * ($weight / 100), 2),
-                    'planned_progress'               => $plannedProgress,
-                    'total_quantity'                 => $totalQuantity,
-                    'completed_quantity'             => $completedQuantity,
-                    'completed_quantity_under_100'   => $completedQuantityUnder100,
-                    'planned_total_quantity'         => $plannedTotalQty,
-                    'start_date'                     => $subproject->start_date?->format('Y-m-d'),
-                    'end_date'                       => $subproject->end_date?->format('Y-m-d'),
-                    'items'                          => $itemsList,
+                    'id'                           => $subproject->id ?? null,
+                    'name'                         => $subproject->name ?? $withoutSubprojectName,
+                    'weight'                       => $weight,
+                    'progress'                     => $progress,
+                    'progress_under_100'           => $progress,
+                    'raw_progress'                 => $rawProgress,
+                    'weighted_progress'            => $weightedProgress,
+                    'weighted_progress_under_100'  => $weightedProgress,
+                    'planned_progress'             => $plannedProgress,
+                    'planned_weighted_progress'    => $plannedWeightedProgress,
+                    'total_quantity'               => $totalQuantity,
+                    'completed_quantity'           => $cappedCompletedQuantity,
+                    'raw_completed_quantity'       => $rawCompletedQuantity,
+                    'completed_quantity_under_100' => $cappedCompletedQuantity,
+                    'planned_total_quantity'       => $plannedTotalQty,
+                    'start_date'                   => $subproject->start_date?->format('Y-m-d'),
+                    'end_date'                     => $subproject->end_date?->format('Y-m-d'),
+                    'items'                        => $itemsList,
                 ];
             })->values();
 
+            $totalWeight = round((float) $subprojects->sum('weight'), 2);
+            $overallProgress = $totalWeight > 0
+                ? round((float) $subprojects->sum('weighted_progress'), 2)
+                : 0.0;
+            $overallPlannedProgress = $totalWeight > 0
+                ? round((float) $subprojects->sum('planned_weighted_progress'), 2)
+                : 0.0;
+
             return response()->json([
-                'success'     => true,
-                'subprojects' => $subprojects,
+                'success'                  => true,
+                'subprojects'              => $subprojects,
+                'total_weight'             => $totalWeight,
+                'weights_is_zero'          => $totalWeight <= 0.0,
+                'weights_is_complete'      => abs($totalWeight - 100.0) <= 0.01,
+                'overall_progress'         => $overallProgress,
+                'overall_planned_progress' => $overallPlannedProgress,
             ]);
 
         } catch (\Exception $e) {
@@ -148,24 +175,33 @@ class ProjectSubprojectController extends Controller
         ]);
 
         $subproject         = $project->subprojects()->findOrFail($subprojectId);
-        $subproject->weight = $request->weight;
+        $subproject->weight = round((float) $request->weight, 2);
         $subproject->save();
 
-        $items             = $subproject->projectItems;
-        $totalQuantity     = $items->sum('total_quantity');
-        $completedQuantity = $items->sum('completed_quantity');
-        $progress          = $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100, 2) : 0;
-        $weightedProgress  = $progress * ($request->weight / 100);
+        $project->load(['items', 'subprojects']);
+        $withoutSubprojectName = __('general.without_subproject');
+
+        $subItems = ($subproject->name === $withoutSubprojectName)
+            ? $project->items->filter(fn($it) => empty($it->subproject_name))
+            : $project->items->where('subproject_name', $subproject->name);
+
+        $measurable        = $subItems->filter(fn($it) => (bool) ($it->is_measurable ?? false));
+        $totalQuantity     = (float) $measurable->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0)));
+        $cappedCompleted   = (float) $measurable->sum(fn($it) => min(max(0, (float) ($it->completed_quantity ?? 0)), max(0, (float) ($it->total_quantity ?? 0))));
+        $progress          = $totalQuantity > 0 ? round(($cappedCompleted / $totalQuantity) * 100, 2) : 0.0;
+        $weightedProgress  = round($progress * ($subproject->weight / 100), 2);
+        $overallProgress   = $project->overall_progress;
 
         return response()->json([
-            'success'    => true,
-            'message'    => __('general.weight_updated_successfully'),
-            'subproject' => [
-                'id'               => $subproject->id,
-                'name'             => $subproject->name,
-                'weight'           => $subproject->weight,
-                'progress'         => $progress,
-                'weighted_progress' => round($weightedProgress, 2),
+            'success'          => true,
+            'message'          => __('general.weight_updated_successfully'),
+            'overall_progress' => $overallProgress,
+            'subproject'       => [
+                'id'                => $subproject->id,
+                'name'              => $subproject->name,
+                'weight'            => $subproject->weight,
+                'progress'          => $progress,
+                'weighted_progress' => $weightedProgress,
             ],
         ]);
     }
@@ -181,9 +217,9 @@ class ProjectSubprojectController extends Controller
         ]);
 
         $weights     = $request->weights;
-        $totalWeight = array_sum($weights);
+        $totalWeight = array_sum(array_map('floatval', $weights));
 
-        if (abs($totalWeight - 100) > 0.01) {
+        if (abs($totalWeight - 100) > 0.05) {
             return response()->json([
                 'success' => false,
                 'message' => __('general.total_weights_must_equal_100') . ': ' . number_format($totalWeight, 2) . '%',
@@ -194,17 +230,22 @@ class ProjectSubprojectController extends Controller
         $updatedCount = 0;
 
         foreach ($subprojects as $subproject) {
-            if (isset($weights[$subproject->id])) {
-                $subproject->weight = $weights[$subproject->id];
+            if ($subproject->id && array_key_exists($subproject->id, $weights)) {
+                $subproject->weight = round((float) $weights[$subproject->id], 2);
                 $subproject->save();
                 $updatedCount++;
             }
         }
 
+        $project->unsetRelation('subprojects');
+        $project->load(['items', 'subprojects']);
+        $overallProgress = $project->overall_progress;
+
         return response()->json([
-            'success'       => true,
-            'message'       => __('general.all_weights_updated_successfully') . ' (' . $updatedCount . ' ' . __('general.subprojects') . ')',
-            'updated_count' => $updatedCount,
+            'success'          => true,
+            'message'          => __('general.all_weights_updated_successfully') . ' (' . $updatedCount . ' ' . __('general.subprojects') . ')',
+            'updated_count'    => $updatedCount,
+            'overall_progress' => $overallProgress,
         ]);
     }
 

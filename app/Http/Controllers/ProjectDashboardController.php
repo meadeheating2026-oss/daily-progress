@@ -194,9 +194,10 @@ class ProjectDashboardController extends Controller
 
             if ($subprojectItems->isEmpty()) continue;
 
-            $totalQuantity     = $subprojectItems->sum('total_quantity');
-            $completedQuantity = $subprojectItems->sum('completed_quantity');
-            $progress          = $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100, 2) : 0;
+            $measurableSubItems = $subprojectItems->filter(fn($it) => (bool) ($it->is_measurable ?? false));
+            $totalQuantity      = round((float) $measurableSubItems->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0))), 2);
+            $completedQuantity  = round((float) $measurableSubItems->sum(fn($it) => min(max(0, (float) ($it->completed_quantity ?? 0)), max(0, (float) ($it->total_quantity ?? 0)))), 2);
+            $progress           = $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100, 2) : 0;
 
             $itemsByCategory  = $subprojectItems->groupBy(
                 fn($item) => $item->workItem->category->name ?? __('general.uncategorized')
@@ -204,9 +205,10 @@ class ProjectDashboardController extends Controller
 
             $categoriesData = [];
             foreach ($itemsByCategory as $categoryName => $categoryItems) {
-                $catTotal     = $categoryItems->sum('total_quantity');
-                $catCompleted = $categoryItems->sum('completed_quantity');
-                $catProgress  = $catTotal > 0 ? round(($catCompleted / $catTotal) * 100, 2) : 0;
+                $measurableCatItems = $categoryItems->filter(fn($it) => (bool) ($it->is_measurable ?? false));
+                $catTotal           = round((float) $measurableCatItems->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0))), 2);
+                $catCompleted       = round((float) $measurableCatItems->sum(fn($it) => min(max(0, (float) ($it->completed_quantity ?? 0)), max(0, (float) ($it->total_quantity ?? 0)))), 2);
+                $catProgress        = $catTotal > 0 ? round(($catCompleted / $catTotal) * 100, 2) : 0;
                 $categoriesData[$categoryName] = [
                     'name'               => $categoryName,
                     'items'              => $categoryItems->values(),
@@ -252,15 +254,23 @@ class ProjectDashboardController extends Controller
         $projectStartDate = $project->start_date ? Carbon::parse($project->start_date) : $today;
         $weeklyHolidays   = $project->weekly_holidays ? explode(',', $project->weekly_holidays) : [];
 
-        if ($project->subprojects->count() > 0 && $project->subprojects->where('weight', '>', 0)->count() > 0) {
+        if ($subprojectsWithItems->isNotEmpty()) {
+            $totalWeight = (float) $subprojectsWithItems->sum(fn($sp) => (float) ($sp->weight ?? 0));
+            if ($totalWeight <= 0) {
+                return 0.0;
+            }
+
             // Weighted Logic
             $plannedProgress = 0;
+            $withoutSubprojectName = __('general.without_subproject');
             foreach ($subprojectsWithItems as $subproject) {
-                if ($subproject->weight <= 0) continue;
+                if (($subproject->weight ?? 0) <= 0) continue;
 
-                $measurableItems = $project->items
-                    ->where('subproject_name', $subproject->name)
-                    ->filter(fn($item) => $item->is_measurable ?? false);
+                $subItems = ($subproject->name === $withoutSubprojectName)
+                    ? $project->items->filter(fn($it) => empty($it->subproject_name))
+                    : $project->items->where('subproject_name', $subproject->name);
+
+                $measurableItems = $subItems->filter(fn($item) => (bool) ($item->is_measurable ?? false));
 
                 if ($measurableItems->isEmpty()) continue;
 
@@ -314,45 +324,50 @@ class ProjectDashboardController extends Controller
         $totalWeightedProgress        = null;
         $totalPlannedWeightedProgress = null;
 
-        if ($project->subprojects->count() > 0 && $project->subprojects->where('weight', '>', 0)->count() > 0) {
-            $totalWeightedProgress        = $project->overall_progress;
-            $totalPlannedWeightedProgress = 0;
+        if ($subprojectsWithItems->isNotEmpty()) {
+            $totalWeight = (float) $subprojectsWithItems->sum(fn($sp) => (float) ($sp->weight ?? 0));
+            $totalWeightedProgress        = $totalWeight > 0 ? $project->overall_progress : 0.0;
+            $totalPlannedWeightedProgress = 0.0;
 
-            foreach ($subprojectsWithItems as $subproject) {
-                if ($subproject->weight <= 0) continue;
+            if ($totalWeight > 0) {
+                $withoutSubprojectName = __('general.without_subproject');
+                foreach ($subprojectsWithItems as $subproject) {
+                    if (($subproject->weight ?? 0) <= 0) continue;
 
-                $measurableItems = $project->items
-                    ->where('subproject_name', $subproject->name)
-                    ->filter(fn($item) => $item->is_measurable ?? false);
+                    $subItems = ($subproject->name === $withoutSubprojectName)
+                        ? $project->items->filter(fn($it) => empty($it->subproject_name))
+                        : $project->items->where('subproject_name', $subproject->name);
 
-                if ($measurableItems->isEmpty()) continue;
+                    $measurableItems = $subItems->filter(fn($item) => (bool) ($item->is_measurable ?? false));
+                    if ($measurableItems->isEmpty()) continue;
 
-                $subTotalQty   = $measurableItems->sum('total_quantity');
-                $subPlannedQty = 0;
+                    $subTotalQty   = (float) $measurableItems->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0)));
+                    $subPlannedQty = 0.0;
 
-                foreach ($measurableItems as $item) {
-                    $itemStartDate   = $item->start_date ? Carbon::parse($item->start_date) : $projectStartDate;
-                    $dailyPlannedQty = $item->estimated_daily_qty ?? 0;
+                    foreach ($measurableItems as $item) {
+                        $itemStartDate   = $item->start_date ? Carbon::parse($item->start_date) : $projectStartDate;
+                        $dailyPlannedQty = (float) ($item->estimated_daily_qty ?? 0);
 
-                    if ($today->gte($itemStartDate)) {
-                        $workingDays   = $this->chartService->calculateWorkingDays($itemStartDate, $today, $weeklyHolidays);
-                        $subPlannedQty += $dailyPlannedQty > 0
-                            ? min($workingDays * $dailyPlannedQty, $item->total_quantity)
-                            : 0;
+                        if ($today->gte($itemStartDate)) {
+                            $workingDays   = $this->chartService->calculateWorkingDays($itemStartDate, $today, $weeklyHolidays);
+                            $subPlannedQty += $dailyPlannedQty > 0
+                                ? min($workingDays * $dailyPlannedQty, max(0, (float) ($item->total_quantity ?? 0)))
+                                : 0.0;
+                        }
                     }
-                }
 
-                $subPlannedProgress           = $subTotalQty > 0 ? ($subPlannedQty / $subTotalQty) * 100 : 0;
-                $totalPlannedWeightedProgress += $subPlannedProgress * ($subproject->weight / 100);
+                    $subPlannedProgress           = $subTotalQty > 0 ? ($subPlannedQty / $subTotalQty) * 100 : 0;
+                    $totalPlannedWeightedProgress += $subPlannedProgress * ($subproject->weight / 100);
+                }
             }
 
             $totalPlannedWeightedProgress = round($totalPlannedWeightedProgress, 2);
         } else {
-            // Classic Mode
-            $measurableItems  = $project->items->filter(fn($item) => $item->is_measurable ?? false);
-            $totalQty         = $measurableItems->sum('total_quantity');
-            $totalCompletedQty = $measurableItems->sum('completed_quantity');
-            $totalPlannedQty  = 0;
+            // Classic Mode (no subprojects)
+            $measurableItems   = $project->items->filter(fn($item) => (bool) ($item->is_measurable ?? false));
+            $totalQty          = (float) $measurableItems->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0)));
+            $totalCompletedQty = (float) $measurableItems->sum(fn($it) => min(max(0, (float) ($it->completed_quantity ?? 0)), max(0, (float) ($it->total_quantity ?? 0))));
+            $totalPlannedQty   = 0.0;
 
             foreach ($measurableItems as $item) {
                 $itemStartDate   = $item->start_date ? Carbon::parse($item->start_date) : $projectStartDate;

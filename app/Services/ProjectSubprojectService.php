@@ -8,42 +8,54 @@ use App\Models\Subproject;
 class ProjectSubprojectService
 {
     /**
-     * ✅ جلب المشاريع الفرعية التي لها بنود فعلية فقط
-     * يضيف مشروع فرعي افتراضي "بدون فرعي" إذا كانت هناك بنود بدون تصنيف فرعي
+     * جلب المشاريع الفرعية التي لها بنود فعلية فقط، مع ضمان وجود سجل فعلي في جدول subprojects
+     * لأي مشروع فرعي مستخدم في البنود حتى يتمكن المستخدم من حفظ وزنه.
      */
     public function getSubprojectsWithItems(Project $project)
     {
-        // أسماء المشاريع الفرعية التي لها بنود
-        $subprojectNamesWithItems = $project->items()
-            ->whereNotNull('subproject_name')
-            ->distinct()
+        $items = $project->relationLoaded('items') ? $project->items : $project->items()->get();
+
+        $subprojectNamesWithItems = $items
             ->pluck('subproject_name')
-            ->toArray();
+            ->filter(fn($name) => !empty($name))
+            ->unique()
+            ->values()
+            ->all();
 
-        // تصفية المشاريع الفرعية المرتبطة بالمشروع
-        $subprojects = $project->subprojects->filter(
-            fn($subproject) => in_array($subproject->name, $subprojectNamesWithItems)
-        );
+        $hasItemsWithoutSubproject = $items->contains(fn($item) => empty($item->subproject_name));
+        $withoutSubprojectName = __('general.without_subproject');
 
-        // إضافة مشروع فرعي افتراضي للبنود بدون تصنيف
-        $itemsWithoutSubproject = $project->items()->whereNull('subproject_name')->exists();
-
-        if ($itemsWithoutSubproject) {
-            $withoutSubprojectName = __('general.without_subproject');
-            $virtualSubproject = new Subproject([
-                'id'             => null,
-                'project_id'     => $project->id,
-                'name'           => $withoutSubprojectName,
-                'start_date'     => null,
-                'end_date'       => null,
-                'total_quantity' => 0,
-                'unit'           => null,
-                'description'    => null,
-                'weight'         => 0,
-            ]);
-            $subprojects->push($virtualSubproject);
+        // إذا كان بالمشروع مشاريع فرعية وبعض البنود بدون اسم مشروع فرعي، أنشئ/اجلب سجل لها ليقبل وزناً
+        if (!empty($subprojectNamesWithItems) && $hasItemsWithoutSubproject) {
+            $subprojectNamesWithItems[] = $withoutSubprojectName;
         }
 
-        return $subprojects;
+        if (empty($subprojectNamesWithItems)) {
+            return collect();
+        }
+
+        $existingByName = ($project->relationLoaded('subprojects') ? $project->subprojects : $project->subprojects()->get())
+            ->keyBy('name');
+
+        $createdAny = false;
+        foreach ($subprojectNamesWithItems as $spName) {
+            if (!$existingByName->has($spName)) {
+                $created = Subproject::firstOrCreate(
+                    ['project_id' => $project->id, 'name' => $spName],
+                    ['weight' => 0]
+                );
+                $existingByName->put($spName, $created);
+                $createdAny = true;
+            }
+        }
+
+        if ($createdAny) {
+            $project->unsetRelation('subprojects');
+            $project->load('subprojects');
+        }
+
+        return ($project->relationLoaded('subprojects') ? $project->subprojects : $project->subprojects()->get())
+            ->filter(fn($sp) => in_array($sp->name, $subprojectNamesWithItems, true))
+            ->values();
     }
 }

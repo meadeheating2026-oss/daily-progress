@@ -240,24 +240,27 @@
 
     if ($project->subprojects->count() > 0) {
         foreach ($itemsBySubproject as $subName => $subItems) {
-            $totQ = (float) $subItems->sum('total_quantity');
-            $compQ = (float) $subItems->sum('completed_quantity');
-            $pct = $totQ > 0 ? round(min(100, ($compQ / $totQ) * 100), 1) : 0;
+            $measSub = $subItems->filter(fn($it) => (bool) ($it->is_measurable ?? false));
+            $totQ = (float) $measSub->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0)));
+            $compQ = (float) $measSub->sum(fn($it) => min(max(0, (float) ($it->completed_quantity ?? 0)), max(0, (float) ($it->total_quantity ?? 0))));
+            $pct = $totQ > 0 ? round(($compQ / $totQ) * 100, 1) : 0;
             $overviewLabels[] = \Illuminate\Support\Str::limit($subName, 26);
             $overviewActual[] = $pct;
             $overviewRemaining[] = round(max(0, 100 - $pct), 1);
         }
     } else {
-        $groupedItems = $project->items->groupBy(fn($it) => $it->workItem->name ?? '-')->take(12);
+        $groupedItems = $project->items->filter(fn($it) => (bool) ($it->is_measurable ?? false))->groupBy(fn($it) => $it->workItem->name ?? '-')->take(12);
         foreach ($groupedItems as $wName => $wItems) {
-            $totQ = (float) $wItems->sum('total_quantity');
-            $compQ = (float) $wItems->sum('completed_quantity');
-            $pct = $totQ > 0 ? round(min(100, ($compQ / $totQ) * 100), 1) : 0;
+            $totQ = (float) $wItems->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0)));
+            $compQ = (float) $wItems->sum(fn($it) => min(max(0, (float) ($it->completed_quantity ?? 0)), max(0, (float) ($it->total_quantity ?? 0))));
+            $pct = $totQ > 0 ? round(($compQ / $totQ) * 100, 1) : 0;
             $overviewLabels[] = \Illuminate\Support\Str::limit($wName, 26);
             $overviewActual[] = $pct;
             $overviewRemaining[] = round(max(0, 100 - $pct), 1);
         }
     }
+
+    $weightStatus = $project->subprojects_weight_status;
 
     $statusBadgeClass = match($project->status) {
         'active' => 'bg-success',
@@ -274,6 +277,20 @@
 @endphp
 
 <div class="kon-details-page">
+    @if($weightStatus['has_subprojects'] && ($weightStatus['is_zero'] || $weightStatus['is_incomplete']))
+        <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 rounded-3">
+            <div class="fw-semibold small">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                @if($weightStatus['is_zero'])
+                    لم يتم تحديد أوزان المشاريع الفرعية بعد (المجموع 0%) — تظهر نسبة إنجاز المشروع الأساسي 0% لحين توزيع الأوزان بمجموع 100%.
+                @else
+                    مجموع أوزان المشاريع الفرعية حالياً ({{ $weightStatus['total_weight'] }}%) — يلزم استكمال الأوزان لتصبح 100%.
+                @endif
+            </div>
+            <a href="{{ route('projects.index') }}" class="btn btn-sm btn-warning fw-bold">تحديد الأوزان</a>
+        </div>
+    @endif
+
     <!-- Top Header Summary Card -->
     <div class="kon-section-card p-3 p-md-4 mb-4">
         <div class="row align-items-center g-3">
@@ -767,7 +784,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $project->subprojects->count() > 0 ? 7 : 6 }}" class="text-center py-4 text-muted">
+                            <td colspan="{{ $project->subprojects->count() ? 7 : 6 }}" class="text-center py-4 text-muted">
                                 لا توجد بنود مضافة لهذا المشروع بعد.
                             </td>
                         </tr>

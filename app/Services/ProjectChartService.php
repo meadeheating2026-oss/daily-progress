@@ -169,8 +169,8 @@ class ProjectChartService implements ProjectChartServiceInterface
                 continue;
             }
 
-            $totalQuantity     = $measurableItems->sum('total_quantity');
-            $completedQuantity = $measurableItems->sum('completed_quantity');
+            $totalQuantity     = (float) $measurableItems->sum(fn($it) => max(0, (float) ($it->total_quantity ?? 0)));
+            $completedQuantity = (float) $measurableItems->sum(fn($it) => min(max(0, (float) ($it->completed_quantity ?? 0)), max(0, (float) ($it->total_quantity ?? 0))));
             $progress          = $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100, 2) : 0;
 
             $plannedTotalQty = 0;

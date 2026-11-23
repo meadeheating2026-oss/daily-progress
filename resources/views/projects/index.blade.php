@@ -320,13 +320,12 @@
                     ->unique()
                     ->values()
                     ->all();
-                $subprojectsWithItemsCount = $project->subprojects
-                    ->filter(fn ($subproject) => in_array($subproject->name, $subprojectNamesWithItems, true))
-                    ->count();
-                if ($project->items->contains(fn ($item) => empty($item->subproject_name))) {
+                $subprojectsWithItemsCount = count($subprojectNamesWithItems);
+                if ($subprojectsWithItemsCount > 0 && $project->items->contains(fn ($item) => empty($item->subproject_name))) {
                     $subprojectsWithItemsCount++;
                 }
 
+                $weightStatus = $project->subprojects_weight_status;
                 $progress = $project->overall_progress ?? 0;
                 $itemsCount = $project->items_count ?? $project->items->count();
                 $employeesCount = $project->employees_count ?? 0;
@@ -371,7 +370,7 @@
                         </div>
 
                         <div class="progress-row">
-                            <span class="project-progress-text">{{ round($progress) }}%</span>
+                            <span class="project-progress-text">{{ number_format($progress, 1) }}%</span>
                             <div class="progress">
                                 <div class="progress-bar"
                                     role="progressbar"
@@ -382,6 +381,21 @@
                                 </div>
                             </div>
                         </div>
+
+                        @if($weightStatus['has_subprojects'] && ($weightStatus['is_zero'] || $weightStatus['is_incomplete']))
+                            <button type="button"
+                                    class="btn btn-sm w-100 text-start mb-2 py-1 px-2 view-subprojects-btn project-weight-warning"
+                                    data-project-id="{{ $project->id }}"
+                                    onclick="event.stopPropagation();"
+                                    style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 8px; font-size: 0.76rem; font-weight: 600;">
+                                <i class="fas fa-exclamation-triangle me-1 text-warning"></i>
+                                @if($weightStatus['is_zero'])
+                                    يلزم إدخال أوزان المشاريع الفرعية (اضغط للتحديد)
+                                @else
+                                    مجموع أوزان الفرعي {{ $weightStatus['total_weight'] }}% — يلزم 100%
+                                @endif
+                            </button>
+                        @endif
 
                         <div class="card-meta">
                             <span class="meta-chip">
@@ -595,26 +609,28 @@
 
     
     <div class="modal fade" id="subprojectsModal" tabindex="-1">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content" style="border-radius: 20px; overflow: hidden;">
-                <div class="modal-header bg-gradient text-white" 
-                     style="background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);">
-                    <h4 class="modal-title" id="subprojectsModalTitle">
-                        <i class="fas fa-sitemap me-2"></i>
-                        {{ __('general.subprojects') }}
-                    </h4>
+        <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 16px; overflow: hidden;">
+                <div class="modal-header bg-primary text-white px-4 py-3">
+                    <h5 class="modal-title text-white fw-bold d-flex align-items-center gap-2" id="subprojectsModalTitle">
+                        <i class="fas fa-sitemap"></i>
+                        <span>{{ __('general.subprojects') }}</span>
+                    </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-4" id="subprojectsContent">
+                <div class="modal-body p-4" id="subprojectsContent" style="background: var(--surface-2, #f8fafc);">
                     <div class="text-center py-5">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">{{ __('general.loading') }}...</span>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 12px;">
+                <div class="modal-footer justify-content-between px-4 py-3">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                         <i class="fas fa-times me-1"></i>{{ __('general.close') }}
+                    </button>
+                    <button type="button" class="btn btn-primary fw-bold px-4 update-all-weights-btn" onclick="updateAllSubprojectsWeights()">
+                        <i class="fas fa-save me-1"></i>{{ __('general.update_all_weights') }}
                     </button>
                 </div>
             </div>
@@ -1164,272 +1180,216 @@
         }
         
         // Render subprojects - دالة منفصلة لعرض subprojects في صفحة /projects
+        // Render subprojects - عرض المشاريع الفرعية بهوية KON Work Plan مع المعادلة الموحدة والحساب اللحظي
+        let currentLoadedSubprojects = [];
+
+        function escapeSubHtml(str) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return str ? String(str).replace(/[&<>"']/g, m => map[m]) : '';
+        }
+
+        function formatQty(num) {
+            const val = parseFloat(num) || 0;
+            return val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+
         function renderSubprojects(subprojects) {
-            console.log('renderSubprojects called with:', subprojects);
-            
             const content = document.getElementById('subprojectsContent');
-            
-            // Validate input
-            if (!content) {
-                console.error('subprojectsContent element not found!');
+            if (!content) return;
+
+            if (!Array.isArray(subprojects) || subprojects.length === 0) {
+                content.innerHTML = '<div class="alert alert-info text-center">{{ __('general.no_subprojects_found') }}</div>';
                 return;
             }
-            
-            // Check if subprojects is valid array
-            if (!Array.isArray(subprojects)) {
-                console.error('subprojects is not an array:', subprojects);
-                content.innerHTML = '<div class="alert alert-danger text-center" style="border-radius: 15px;">{{ __('general.error_loading_subprojects') }}</div>';
-                return;
-            }
-            
-            if (subprojects.length === 0) {
-                console.log('No subprojects to render');
-                content.innerHTML = '<div class="alert alert-info text-center" style="border-radius: 15px;">{{ __('general.no_subprojects_found') }}</div>';
-                return;
-            }
-            
-            console.log('Rendering', subprojects.length, 'subprojects');
-            
-            // Calculate total weighted progress
-            const totalWeightedProgress = subprojects.reduce((sum, sp) => sum + (sp.weighted_progress || 0), 0);
-            const totalProgress = subprojects.reduce((sum, sp) => sum + (sp.progress || 0), 0);
-            
-            // Calculate total weighted progress excluding items > 100%
-            const totalWeightedProgressUnder100 = subprojects.reduce((sum, sp) => sum + (sp.weighted_progress_under_100 || 0), 0);
-            const totalProgressUnder100 = subprojects.reduce((sum, sp) => sum + (sp.progress_under_100 || 0), 0);
-            
+
+            currentLoadedSubprojects = subprojects;
+
+            const totalWeight = subprojects.reduce((sum, sp) => sum + (parseFloat(sp.weight) || 0), 0);
+            const totalWeightedProgress = totalWeight > 0
+                ? subprojects.reduce((sum, sp) => sum + ((parseFloat(sp.progress) || 0) * ((parseFloat(sp.weight) || 0) / 100)), 0)
+                : 0;
+
+            const isZeroWeight = totalWeight <= 0;
+            const isCompleteWeight = Math.abs(totalWeight - 100) <= 0.05;
+
             let html = `
-                <div class="row g-4 mb-4">
-                    <div class="col-12">
-                        <div class="card border-0 shadow-sm" style="border-radius: 15px; background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);">
-                            <div class="card-body text-white p-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-1"><i class="fas fa-chart-line me-2"></i>{{ __('general.total_weighted_progress') }}</h5>
-                                        <p class="mb-0 text-white-50">{{ __('general.total_weighted_progress_description') }}</p>
-                                    </div>
-                                    <div class="text-end d-flex align-items-center gap-3">
-                                        <div>
-                                            <div class="mb-2">
-                                                <b class="mb-0 fw-bold" >${totalProgress.toFixed(2)}%</b>/
-                                                <b class="mb-0 fw-bold" style="">${totalWeightedProgress.toFixed(2)}%</b>
-                                            </div>
-                                            <div class="border-top pt-2" style="border-color: rgba(255,255,255,0.3) !important;">
-                                                <small class="text-white-50 d-block mb-1">( :: {{ __('general.scalable_ratio_not_included_above_100') }} ::)</small>
-                                                <b class="mb-0 fw-bold">${totalProgressUnder100.toFixed(2)}%</b>/
-                                                <b class="mb-0 fw-bold" style="font-size: 2.5rem;">${totalWeightedProgressUnder100.toFixed(2)}%</b>
-                                            </div>
-                                        </div>
-                                        <button type="button" 
-                                                class="btn btn-light btn-sm update-all-weights-btn"
-                                                style="border-radius: 10px; font-weight: 600; white-space: nowrap;"
-                                                onclick="updateAllSubprojectsWeights()">
-                                            <i class="fas fa-save me-1"></i>{{ __('general.update_all_weights') }}
-                                        </button>
-                                    </div>
+                <!-- Executive Summary Card -->
+                <div class="p-3 p-md-4 mb-3 rounded-4 text-white shadow-sm" style="background: #213c7a;">
+                    <div class="row align-items-center g-3">
+                        <div class="col-lg-7">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <i class="fas fa-chart-pie fa-lg text-white"></i>
+                                <h5 class="mb-0 fw-bold text-white">{{ __('general.total_weighted_progress') }}</h5>
+                            </div>
+                            <p class="mb-2 small" style="color: rgba(255,255,255,0.82);">
+                                نسبة إنجاز كل مشروع فرعي تُحسب من بنوده القابلة للقياس (بسقف 100% لكل بند)، ثم تُضرب في وزن المشروع الفرعي لتحديد نصيبه من المشروع الأساسي.
+                            </p>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                                <span id="konTotalWeightsPill" class="badge px-3 py-2 fw-bold" style="font-size: 0.82rem; background: ${isCompleteWeight ? '#16803c' : '#d97706'}; color: #fff;">
+                                    مجموع الأوزان الحالي: <span id="konTotalWeightsValue">${totalWeight.toFixed(2)}%</span> / 100%
+                                </span>
+                                <button type="button" class="btn btn-sm btn-light fw-semibold" onclick="distributeSubprojectWeightsEqually()">
+                                    <i class="fas fa-scale-balanced me-1 text-primary"></i>توزيع الأوزان بالتساوي
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-5 text-lg-end">
+                            <div class="d-inline-block text-center px-4 py-3 rounded-3" style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); min-width: 210px;">
+                                <div class="small mb-1" style="color: rgba(255,255,255,0.85);">نسبة إنجاز المشروع الأساسي</div>
+                                <div id="konMainProjectWeightedPct" class="fw-bold text-white" style="font-size: 2.35rem; line-height: 1.1;">
+                                    ${totalWeightedProgress.toFixed(2)}%
                                 </div>
+                                <div class="small mt-1" style="color: rgba(255,255,255,0.75);">من مجموع المشاريع الفرعية</div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Dynamic Weight Validation Banner -->
+                <div id="konWeightWarningBanner" class="alert ${isCompleteWeight ? 'd-none alert-success' : 'alert-warning'} d-flex align-items-center gap-2 py-2 px-3 mb-3 rounded-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="konWeightWarningText" class="fw-semibold small">
+                        ${isZeroWeight
+                            ? 'لم يتم تحديد أوزان المشاريع الفرعية بعد (المجموع 0%) — تظهر نسبة المشروع الأساسي 0% لحين إدخال الأوزان بمجموع 100% وحفظها.'
+                            : (!isCompleteWeight ? `مجموع الأوزان الحالي (${totalWeight.toFixed(2)}%) لا يساوي 100% — يرجى ضبط الأوزان لتساوي 100% تماماً ثم الضغط على حفظ.` : '')}
+                    </span>
+                </div>
+
                 <div class="row g-3">
             `;
-            
-            subprojects.forEach(subproject => {
-                const progress = subproject.progress || 0;
-                const progressUnder100 = subproject.progress_under_100 || 0;
-                const weight = subproject.weight || 0;
-                const weightedProgress = subproject.weighted_progress || 0;
-                const weightedProgressUnder100 = subproject.weighted_progress_under_100 || 0;
-                
-                let progressColor = 'bg-danger';
-                if (progress >= 75) progressColor = 'bg-success';
-                else if (progress >= 50) progressColor = 'bg-info';
-                else if (progress >= 25) progressColor = 'bg-warning';
-                
-                let progressUnder100Color = 'bg-danger';
-                if (progressUnder100 >= 75) progressUnder100Color = 'bg-success';
-                else if (progressUnder100 >= 50) progressUnder100Color = 'bg-info';
-                else if (progressUnder100 >= 25) progressUnder100Color = 'bg-warning';
-                
+
+            subprojects.forEach((subproject, idx) => {
+                const progress = parseFloat(subproject.progress) || 0;
+                const weight = parseFloat(subproject.weight) || 0;
+                const weightedShare = progress * (weight / 100);
+                const clampedSubPct = Math.min(100, Math.max(0, progress));
+                const subLabelClass = clampedSubPct >= 52 ? 'on-dark' : 'on-light';
+
+                const measurableItems = (subproject.items || []).filter(item => item.is_measurable);
+                const nonMeasurableItems = (subproject.items || []).filter(item => !item.is_measurable);
+                const totalItems = (subproject.items || []).length;
+                const accordionId = `itemsAccordion_${subproject.id || idx}`;
+
                 html += `
                     <div class="col-md-6">
-                        <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
-                            <div class="card-header bg-white border-0 pb-2" style="border-radius: 15px 15px 0 0;">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <h6 class="mb-0 fw-bold">
-                                        <i class="fas fa-sitemap me-2 text-primary"></i>
-                                        ${subproject.name}
-                                    </h6>
-                                </div>
+                        <div class="card h-100 subproject-modal-card" data-subproject-index="${idx}" data-subproject-progress="${progress}" style="border-radius: 14px; border: 1px solid #e2e8f0; background: #ffffff;">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 px-3" style="border-bottom: 1px solid #f1f5f9;">
+                                <h6 class="mb-0 fw-bold d-flex align-items-center gap-2" style="color: #0f172a;">
+                                    <i class="fas fa-sitemap text-primary"></i>
+                                    <span>${escapeSubHtml(subproject.name)}</span>
+                                </h6>
+                                <span class="badge sub-weight-pill" style="background: rgba(33,60,122,0.10); color: #213c7a; border: 1px solid rgba(33,60,122,0.2);">
+                                    الوزن: <span class="sub-weight-pill-val">${weight.toFixed(1)}</span>%
+                                </span>
                             </div>
-                            <div class="card-body p-4">
-                                
+
+                            <div class="card-body p-3">
+                                <!-- Subproject Own Progress -->
                                 <div class="mb-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="text-muted small">
-                                            <i class="fas fa-tasks me-1"></i>{{ __(' progress') }}
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="small fw-semibold text-muted">
+                                            <i class="fas fa-tasks me-1 text-primary"></i>نسبة إنجاز المشروع الفرعي (داخلياً)
                                         </span>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="text-muted small">${progress.toFixed(2)}%</span>
-                                            ${progressUnder100 !== progress ? `
-                                                <span class="fw-bold ">(${progressUnder100.toFixed(2)}%)</span>
-                                            ` : ''}
-                                        </div>
+                                        <span class="fw-bold" style="color: #0f172a;">${progress.toFixed(2)}%</span>
                                     </div>
-                                
-                                  
+                                    <div class="kon-progress-track" style="height: 22px;">
+                                        <div class="kon-progress-fill ${clampedSubPct >= 80 ? 'fill-actual' : 'fill-planned'}" style="width: ${clampedSubPct}%;"></div>
+                                        <span class="kon-progress-label ${subLabelClass}" style="font-size: 0.75rem;">${progress.toFixed(2)}%</span>
+                                    </div>
                                 </div>
-                                
-                                
-                                <div class="row g-3 mb-3">
+
+                                <!-- Weight Input + Weighted Contribution Share -->
+                                <div class="row g-2 mb-3">
                                     <div class="col-6">
-                                        <div class="p-3 bg-light rounded-3">
-                                            <div class="d-flex align-items-center text-muted mb-1">
-                                                <i class="fas fa-weight me-2"></i>
-                                                <small class="fw-semibold">{{ __('general.weight') }}</small>
-                                            </div>
-                                            <div class="d-flex align-items-center gap-2">
-                                                <input type="number" 
-                                                       class="form-control form-control-sm weight-input" 
-                                                       data-subproject-id="${subproject.id}"
+                                        <div class="p-2 px-3 rounded-3 h-100" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                                            <label class="small fw-bold text-muted d-block mb-1">
+                                                <i class="fas fa-weight-hanging me-1 text-primary"></i>الوزن من الأساسي
+                                            </label>
+                                            <div class="input-group input-group-sm">
+                                                <input type="number"
+                                                       class="form-control fw-bold text-center weight-input"
+                                                       data-subproject-id="${subproject.id || ''}"
+                                                       data-subproject-progress="${progress}"
                                                        value="${weight}"
                                                        min="0"
                                                        max="100"
-                                                       step="0.1"
-                                                       style="border-radius: 8px; border: 2px solidrgb(64, 160, 255);"
-                                                       onchange="this.style.borderColor='#28a745'">
-                                                <span class="text-muted small">%</span>
+                                                       step="0.01"
+                                                       oninput="recalculateSubprojectWeightsLive()">
+                                                <span class="input-group-text fw-semibold">%</span>
                                             </div>
                                         </div>
                                     </div>
+
                                     <div class="col-6">
-                                        <div class="p-3 bg-light rounded-3">
-                                            <div class="d-flex align-items-center text-muted mb-1">
-                                                <i class="fas fa-chart-bar me-2"></i>
-                                                <small class="fw-semibold">{{ __('general.weighted_progress') }}</small>
+                                        <div class="p-2 px-3 rounded-3 h-100 d-flex flex-column justify-content-center" style="background: rgba(22,128,60,0.06); border: 1px solid rgba(22,128,60,0.20);">
+                                            <div class="small fw-bold text-muted mb-1">
+                                                <i class="fas fa-chart-pie me-1 text-success"></i>نصيبه بالمشروع الأساسي
                                             </div>
-                                        
+                                            <div class="d-flex align-items-baseline justify-content-between">
+                                                <span class="fw-bold text-success sub-weighted-share-val" style="font-size: 1.2rem;">${weightedShare.toFixed(2)}%</span>
+                                                <small class="text-muted">من <span class="sub-weight-of-val">${weight.toFixed(1)}%</span></small>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                                
-                                
-                                <div class="row g-2">
+
+                                <!-- Clean Rounded Measurable Quantities -->
+                                <div class="row g-2 py-2 px-2 rounded-3 mx-0" style="background: #f8fafc; border: 1px solid #f1f5f9;">
                                     <div class="col-6">
-                                        <small class="text-muted d-block mb-1">
-                                            <i class="fas fa-list-ul me-1"></i>{{ __('general.total') }}
-                                        </small>
-                                        <div class="fw-semibold">${subproject.total_quantity || 0}</div>
+                                        <small class="text-muted d-block">إجمالي الكميات (القابلة للقياس)</small>
+                                        <div class="fw-bold" style="color: #0f172a;">${formatQty(subproject.total_quantity)}</div>
                                     </div>
-                                    <div class="col-6">
-                                        <small class="text-muted d-block mb-1">
-                                            <i class="fas fa-check-circle me-1"></i>{{ __('general.completed') }}
-                                        </small>
-                                        <div class="fw-semibold">${subproject.completed_quantity || 0}</div>
+                                    <div class="col-6 border-start ps-3">
+                                        <small class="text-muted d-block">المنفذ المعتمد (بسقف 100% للبند)</small>
+                                        <div class="fw-bold text-success">${formatQty(subproject.completed_quantity)}</div>
                                     </div>
                                 </div>
-                                
-                                ${subproject.items && subproject.items.length > 0 ? `
-                                <div class="mt-4 border-top pt-3">
-                                    ${(() => {
-                                        // Separate measurable and non-measurable items
-                                        const measurableItems = subproject.items.filter(item => item.is_measurable ?? false);
-                                        const nonMeasurableItems = subproject.items.filter(item => !(item.is_measurable ?? false));
-                                        const totalItems = subproject.items.length;
-                                        
-                                        const accordionId = `itemsAccordion_${subproject.id}`;
-                                        
-                                        return `
-                                            <div class="accordion" id="${accordionId}">
-                                                <div class="accordion-item" style="border-radius: 10px; border: 1px solid #e9ecef;">
-                                                    <h2 class="accordion-header" id="heading_${accordionId}">
-                                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_${accordionId}" aria-expanded="false" aria-controls="collapse_${accordionId}" style="border-radius: 10px;">
-                                                            <i class="fas fa-list-ul me-2 text-primary"></i>
-                                                            <span class="fw-semibold">{{ __('general.items') }}</span>
-                                                            <span class="badge bg-primary ms-2">${totalItems}</span>
-                                                            ${measurableItems.length > 0 && nonMeasurableItems.length > 0 ? `
-                                                                <span class="badge bg-success ms-2">${measurableItems.length} {{ __('general.measurable') }}</span>
-                                                                <span class="badge bg-secondary ms-2">${nonMeasurableItems.length} {{ __('general.not_measurable') }}</span>
-                                                            ` : ''}
-                                                        </button>
-                                                    </h2>
-                                                    <div id="collapse_${accordionId}" class="accordion-collapse collapse" aria-labelledby="heading_${accordionId}" data-bs-parent="#${accordionId}">
-                                                        <div class="accordion-body p-3">
-                                                            ${measurableItems.length > 0 ? `
-                                                                <div class="mb-3">
-                                                                    ${nonMeasurableItems.length > 0 ? `<h6 class="mb-2 text-success"><i class="fas fa-check-circle me-1"></i>{{ __('general.measurable_items') }}</h6>` : ''}
-                                                                    <div class="list-group" style="border-radius: 10px;">
-                                                                        ${measurableItems.map(item => {
-                                                                            const itemProgress = parseFloat(item.progress || 0);
-                                                                            const progressColor = itemProgress >= 75 ? 'success' : 
-                                                                                                  itemProgress >= 50 ? 'info' : 
-                                                                                                  itemProgress >= 25 ? 'warning' : 'danger';
-                                                                            
-                                                                            return `
-                                                                                <div class="list-group-item" style="border-radius: 8px; margin-bottom: 8px; border: 1px solid #e9ecef;">
-                                                                                    <div class="d-flex justify-content-between align-items-start">
-                                                                                        <div class="flex-grow-1">
-                                                                                            <div class="d-flex align-items-center mb-1">
-                                                                                                <span class="fw-semibold">${item.name}</span>
-                                                                                            </div>
-                                                                                            <div class="small text-muted mb-2">
-                                                                                                <span>{{ __('general.completed') }}: ${parseFloat(item.completed_quantity || 0).toFixed(2)} / ${parseFloat(item.total_quantity || 0).toFixed(2)} ${item.unit}</span>
-                                                                                            </div>
-                                                                                            <div class="progress" style="height: 6px; border-radius: 5px;">
-                                                                                                <div class="progress-bar bg-${progressColor}" 
-                                                                                                     role="progressbar" 
-                                                                                                     style="width: ${itemProgress}%" 
-                                                                                                     aria-valuenow="${itemProgress}" 
-                                                                                                     aria-valuemin="0" 
-                                                                                                     aria-valuemax="100">
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        <div class="text-end ms-2">
-                                                                                            <span class="badge bg-${progressColor}">${itemProgress.toFixed(1)}%</span>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            `;
-                                                                        }).join('')}
-                                                                    </div>
+
+                                ${totalItems > 0 ? `
+                                <div class="mt-3 pt-2">
+                                    <div class="accordion" id="${accordionId}">
+                                        <div class="accordion-item border rounded-3 overflow-hidden">
+                                            <h2 class="accordion-header" id="heading_${accordionId}">
+                                                <button class="accordion-button collapsed py-2 px-3 bg-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_${accordionId}" aria-expanded="false">
+                                                    <i class="fas fa-list-ul me-2 text-primary"></i>
+                                                    <span class="fw-semibold small">{{ __('general.items') }}</span>
+                                                    <span class="badge bg-primary ms-2">${totalItems}</span>
+                                                    <span class="badge bg-success ms-1">${measurableItems.length} قابل للقياس</span>
+                                                    ${nonMeasurableItems.length > 0 ? `<span class="badge bg-secondary ms-1">${nonMeasurableItems.length} غير قابل للقياس</span>` : ''}
+                                                </button>
+                                            </h2>
+                                            <div id="collapse_${accordionId}" class="accordion-collapse collapse" data-bs-parent="#${accordionId}">
+                                                <div class="accordion-body p-2" style="max-height: 260px; overflow-y: auto;">
+                                                    ${measurableItems.map(item => {
+                                                        const itemPct = Math.min(100, Math.max(0, parseFloat(item.progress || 0)));
+                                                        const rawPct = parseFloat(item.raw_progress || itemPct);
+                                                        return `
+                                                            <div class="p-2 mb-2 rounded border bg-white">
+                                                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                                                    <span class="fw-semibold small text-dark">${escapeSubHtml(item.name)}</span>
+                                                                    <span class="badge ${itemPct >= 80 ? 'bg-success' : 'bg-primary'}">${itemPct.toFixed(1)}%</span>
                                                                 </div>
-                                                            ` : ''}
-                                                            
-                                                            ${nonMeasurableItems.length > 0 ? `
-                                                                <div>
-                                                                    ${measurableItems.length > 0 ? `<h6 class="mb-2 text-secondary"><i class="fas fa-info-circle me-1"></i>{{ __('general.non_measurable_items') }}</h6>` : ''}
-                                                                    <div class="list-group" style="border-radius: 10px;">
-                                                                        ${nonMeasurableItems.map(item => {
-                                                                            return `
-                                                                                <div class="list-group-item bg-light" style="border-radius: 8px; margin-bottom: 8px; border: 1px solid #e9ecef;">
-                                                                                    <div class="d-flex justify-content-between align-items-start">
-                                                                                        <div class="flex-grow-1">
-                                                                                            <div class="d-flex align-items-center mb-1">
-                                                                                                <span class="fw-semibold">${item.name}</span>
-                                                                                                <span class="badge bg-secondary ms-2" style="">
-                                                                                                    <i class="fas fa-info-circle me-1"></i>{{ __('general.not_measurable') }}
-                                                                                                </span>
-                                                                                            </div>
-                                                                                            <div class="small text-muted">
-                                                                                                <i class="fas fa-exclamation-triangle me-1 text-warning"></i>
-                                                                                                {{ __('general.not_included_in_progress_calculation') }}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            `;
-                                                                        }).join('')}
-                                                                    </div>
+                                                                <div class="small text-muted mb-1">
+                                                                    المنفذ: <strong>${formatQty(item.completed_quantity)}</strong> / ${formatQty(item.total_quantity)} ${escapeSubHtml(item.unit)}
+                                                                    ${rawPct > 100 ? `<span class="text-warning ms-1">(محسوب عند سقف 100%)</span>` : ''}
                                                                 </div>
-                                                            ` : ''}
+                                                                <div class="progress" style="height: 5px;">
+                                                                    <div class="progress-bar ${itemPct >= 80 ? 'bg-success' : 'bg-primary'}" style="width: ${itemPct}%"></div>
+                                                                </div>
+                                                            </div>
+                                                        `;
+                                                    }).join('')}
+                                                    ${nonMeasurableItems.map(item => `
+                                                        <div class="p-2 mb-1 rounded border bg-light d-flex justify-content-between align-items-center">
+                                                            <span class="small text-muted">${escapeSubHtml(item.name)}</span>
+                                                            <span class="badge bg-secondary">غير قابل للقياس</span>
                                                         </div>
-                                                    </div>
+                                                    `).join('')}
                                                 </div>
                                             </div>
-                                        `;
-                                    })()}
+                                        </div>
+                                    </div>
                                 </div>
                                 ` : ''}
                             </div>
@@ -1437,104 +1397,106 @@
                     </div>
                 `;
             });
-            
+
             html += '</div>';
             content.innerHTML = html;
         }
-        
-        // Update subproject weight
-        function updateSubprojectWeight(subprojectId) {
-            const input = document.querySelector(`.weight-input[data-subproject-id="${subprojectId}"]`);
-            if (!input || !currentProjectId) return;
-            
-            const weight = parseFloat(input.value);
-            if (isNaN(weight) || weight < 0) {
-                alert('{{ __('general.weight_must_be_positive') }}');
-                return;
-            }
-            
-            // Calculate total of all weights
-            const allWeightInputs = document.querySelectorAll('.weight-input');
+
+        // حساب لحظي لنصيب كل مشروع فرعي ونسبة المشروع الأساسي ومجموع الأوزان أثناء الكتابة
+        function recalculateSubprojectWeightsLive() {
+            const cards = document.querySelectorAll('#subprojectsContent .subproject-modal-card');
             let totalWeight = 0;
-            allWeightInputs.forEach(wInput => {
-                const wValue = parseFloat(wInput.value) || 0;
-                totalWeight += wValue;
+            let totalWeightedProgress = 0;
+
+            cards.forEach(card => {
+                const input = card.querySelector('.weight-input');
+                const subProgress = parseFloat(card.getAttribute('data-subproject-progress')) || 0;
+                const weight = Math.max(0, parseFloat(input?.value) || 0);
+                const share = subProgress * (weight / 100);
+
+                totalWeight += weight;
+                totalWeightedProgress += share;
+
+                const shareEl = card.querySelector('.sub-weighted-share-val');
+                const ofEl = card.querySelector('.sub-weight-of-val');
+                const pillEl = card.querySelector('.sub-weight-pill-val');
+                if (shareEl) shareEl.textContent = share.toFixed(2) + '%';
+                if (ofEl) ofEl.textContent = weight.toFixed(1) + '%';
+                if (pillEl) pillEl.textContent = weight.toFixed(1);
             });
-            
-            // Check if total equals 100
-            if (Math.abs(totalWeight - 100) > 0.01) { // Allow small floating point differences
-                alert('{{ __('general.total_weights_must_equal_100') }}: ' + totalWeight.toFixed(2) + '%');
-                return;
-            }
-            
-            const btn = document.querySelector(`.update-weight-btn[data-subproject-id="${subprojectId}"]`);
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>{{ __('general.updating') }} <b>...</b>';
-            btn.disabled = true;
-            
-            fetch(`/api/projects/${currentProjectId}/subprojects/${subprojectId}/update-weight`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ weight: weight })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update the weighted progress in the UI
-                    const card = input.closest('.card');
-                    const weightedProgressElement = card.querySelector('.fw-bold.text-primary');
-                    if (weightedProgressElement && data.subproject) {
-                        weightedProgressElement.textContent = data.subproject.weighted_progress.toFixed(2) + '%';
-                    }
-                    
-                    // Reset input border
-                    input.style.borderColor = '#e9ecef';
-                    
-                    // Show success message
-                    const alert = document.createElement('div');
-                    alert.className = 'alert alert-success alert-dismissible fade show';
-                    alert.style.borderRadius = '10px';
-                    const successMsg = data.message || '{{ __('general.weight_updated_successfully') }}';
-                    alert.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + successMsg + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-                    card.querySelector('.card-body').insertBefore(alert, card.querySelector('.card-body').firstChild);
-                    
-                    setTimeout(() => {
-                        alert.remove();
-                    }, 3000);
-                    
-                    // Recalculate total weighted progress
-                    loadSubprojects(currentProjectId);
+
+            const effectiveMainPct = totalWeight > 0 ? totalWeightedProgress : 0;
+            const mainPctEl = document.getElementById('konMainProjectWeightedPct');
+            if (mainPctEl) mainPctEl.textContent = effectiveMainPct.toFixed(2) + '%';
+
+            const weightValEl = document.getElementById('konTotalWeightsValue');
+            const weightPillEl = document.getElementById('konTotalWeightsPill');
+            const bannerEl = document.getElementById('konWeightWarningBanner');
+            const bannerTextEl = document.getElementById('konWeightWarningText');
+
+            const isComplete = Math.abs(totalWeight - 100) <= 0.05;
+            const isZero = totalWeight <= 0;
+
+            if (weightValEl) weightValEl.textContent = totalWeight.toFixed(2) + '%';
+            if (weightPillEl) weightPillEl.style.background = isComplete ? '#16803c' : '#d97706';
+
+            if (bannerEl && bannerTextEl) {
+                if (isComplete) {
+                    bannerEl.classList.add('d-none');
                 } else {
-                    alert(data.message || '{{ __('general.error_occurred') }}');
+                    bannerEl.classList.remove('d-none');
+                    bannerTextEl.textContent = isZero
+                        ? 'لم يتم تحديد أوزان المشاريع الفرعية بعد (المجموع 0%) — تظهر نسبة المشروع الأساسي 0% لحين إدخال الأوزان بمجموع 100% وحفظها.'
+                        : `مجموع الأوزان الحالي (${totalWeight.toFixed(2)}%) لا يساوي 100% — المتبقي للتوزيع: ${(100 - totalWeight).toFixed(2)}%.`;
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('{{ __('general.error_occurred') }}');
-            })
-            .finally(() => {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
-            });
-        }
-        
-        // Update all subprojects weights
-        function updateAllSubprojectsWeights() {
-            if (!currentProjectId) {
-                alert('{{ __('general.error_occurred') }}');
-                return;
             }
-            
-            // Get all weight inputs
-            const allWeightInputs = document.querySelectorAll('.weight-input');
+        }
+
+        // توزيع الـ 100% بالتساوي بضغطة واحدة
+        function distributeSubprojectWeightsEqually() {
+            const inputs = Array.from(document.querySelectorAll('#subprojectsContent .weight-input'));
+            if (!inputs.length) return;
+            const n = inputs.length;
+            const base = Math.floor((100 / n) * 100) / 100;
+            let assigned = 0;
+
+            inputs.forEach((input, idx) => {
+                if (idx === n - 1) {
+                    input.value = (100 - assigned).toFixed(2);
+                } else {
+                    input.value = base.toFixed(2);
+                    assigned += base;
+                }
+            });
+            recalculateSubprojectWeightsLive();
+        }
+
+        function syncProjectCardOnPage(projectId, newOverallProgress) {
+            const card = document.querySelector(`.project-card[data-project-id="${projectId}"]`);
+            if (!card) return;
+            const pct = Math.min(100, Math.max(0, parseFloat(newOverallProgress) || 0));
+            card.setAttribute('data-project-progress', pct);
+            const textEl = card.querySelector('.project-progress-text');
+            if (textEl) textEl.textContent = pct.toFixed(1) + '%';
+            const barEl = card.querySelector('.progress-row .progress-bar');
+            if (barEl) {
+                barEl.style.width = pct + '%';
+                barEl.setAttribute('aria-valuenow', pct);
+            }
+            card.querySelector('.project-weight-warning')?.remove();
+        }
+
+        function updateSubprojectWeight(subprojectId) {
+            updateAllSubprojectsWeights();
+        }
+
+        function updateAllSubprojectsWeights() {
+            if (!currentProjectId) return;
+
+            const allWeightInputs = document.querySelectorAll('#subprojectsContent .weight-input');
             const weights = {};
             let totalWeight = 0;
-            
-            // Collect all weights
+
             allWeightInputs.forEach(input => {
                 const subprojectId = input.getAttribute('data-subproject-id');
                 const weight = parseFloat(input.value) || 0;
@@ -1543,22 +1505,19 @@
                     totalWeight += weight;
                 }
             });
-            
-            // Validate total equals 100
-            if (Math.abs(totalWeight - 100) > 0.01) {
+
+            if (Math.abs(totalWeight - 100) > 0.05) {
                 alert('{{ __('general.total_weights_must_equal_100') }}: ' + totalWeight.toFixed(2) + '%');
                 return;
             }
-            
-            // Get button and show loading
-            const btn = document.querySelector('.update-all-weights-btn');
-            if (!btn) return;
-            
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>{{ __('general.updating') }}...';
-            btn.disabled = true;
-            
-            // Send request
+
+            const btns = document.querySelectorAll('.update-all-weights-btn');
+            btns.forEach(b => {
+                b.dataset.origHtml = b.innerHTML;
+                b.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>{{ __('general.updating') }}...';
+                b.disabled = true;
+            });
+
             fetch(`/api/projects/${currentProjectId}/subprojects/update-all-weights`, {
                 method: 'POST',
                 headers: {
@@ -1571,27 +1530,19 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Reset all input borders
-                    allWeightInputs.forEach(input => {
-                        input.style.borderColor = '#e9ecef';
-                    });
-                    
-                    // Show success message
-                    const content = document.getElementById('subprojectsContent');
-                    const alert = document.createElement('div');
-                    alert.className = 'alert alert-success alert-dismissible fade show';
-                    alert.style.borderRadius = '10px';
-                    alert.style.marginBottom = '1rem';
-                    const successMsg = data.message || '{{ __('general.all_weights_updated_successfully') }}';
-                    alert.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + successMsg + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-                    content.insertBefore(alert, content.firstChild);
-                    
-                    setTimeout(() => {
-                        alert.remove();
-                    }, 3000);
-                    
-                    // Reload subprojects to update weighted progress
+                    if (typeof data.overall_progress !== 'undefined') {
+                        syncProjectCardOnPage(currentProjectId, data.overall_progress);
+                    }
                     loadSubprojects(currentProjectId);
+
+                    const content = document.getElementById('subprojectsContent');
+                    setTimeout(() => {
+                        if (!content) return;
+                        const okAlert = document.createElement('div');
+                        okAlert.className = 'alert alert-success alert-dismissible fade show mb-3 rounded-3';
+                        okAlert.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + (data.message || '{{ __('general.all_weights_updated_successfully') }}') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                        content.prepend(okAlert);
+                    }, 350);
                 } else {
                     alert(data.message || '{{ __('general.error_occurred') }}');
                 }
@@ -1601,14 +1552,17 @@
                 alert('{{ __('general.error_occurred') }}');
             })
             .finally(() => {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
+                btns.forEach(b => {
+                    if (b.dataset.origHtml) b.innerHTML = b.dataset.origHtml;
+                    b.disabled = false;
+                });
             });
         }
-        
-        // Make functions globally available
+
         window.updateSubprojectWeight = updateSubprojectWeight;
         window.updateAllSubprojectsWeights = updateAllSubprojectsWeights;
+        window.recalculateSubprojectWeightsLive = recalculateSubprojectWeightsLive;
+        window.distributeSubprojectWeightsEqually = distributeSubprojectWeightsEqually;
     </script>
 
     
