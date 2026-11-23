@@ -4,6 +4,8 @@ namespace App\Repositories;
 
 use App\Models\Project;
 use App\Contracts\ProjectRepositoryInterface;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class ProjectRepository implements ProjectRepositoryInterface
@@ -32,7 +34,7 @@ class ProjectRepository implements ProjectRepositoryInterface
     {
         return Project::where('is_draft', true)
             ->where('is_archived', false)
-            ->with($this->indexRelations())
+            ->with(['client:id,name', 'type:id,name'])
             ->withCount(['items', 'employees'])
             ->latest()
             ->get();
@@ -49,20 +51,75 @@ class ProjectRepository implements ProjectRepositoryInterface
 
     public function getByUserId(int $userId, bool $isDraft = false, bool $isArchived = false): Collection
     {
-        // البحث عن المشاريع المرتبطة بالموظف الذي user_id = $userId
         return Project::whereHas('employees', function ($query) use ($userId) {
             $query->where('user_id', $userId);
         })
             ->where('is_draft', $isDraft)
             ->where('is_archived', $isArchived)
-            ->with($this->indexRelations())
+            ->with($isDraft ? ['client:id,name', 'type:id,name'] : $this->indexRelations())
             ->withCount(['items', 'employees'])
             ->latest($isArchived ? 'archived_at' : 'created_at')
             ->get();
     }
 
     /**
-     * علاقات خفيفة لقائمة المشاريع — تكفي لحساب التقدم وعدّ الفروع بدون N+1.
+     * High-scale paginated & SQL-filtered project query (scales cleanly to 10,000+ projects).
+     */
+    public function paginateFiltered(
+        array $filters = [],
+        ?int $userId = null,
+        bool $isDraft = false,
+        bool $isArchived = false,
+        int $perPage = 24
+    ): LengthAwarePaginator {
+        $query = Project::query()
+            ->where('is_draft', $isDraft)
+            ->where('is_archived', $isArchived);
+
+        if ($userId !== null) {
+            $query->whereHas('employees', function (Builder $q) use ($userId) {
+                $q->where('user_id', $userId);
+            });
+        }
+
+        if (!empty($filters['search'])) {
+            $term = trim((string) $filters['search']);
+            $query->where(function (Builder $q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                  ->orWhereHas('client', fn(Builder $cq) => $cq->where('name', 'like', "%{$term}%"));
+            });
+        }
+
+        if (!empty($filters['status']) && $filters['status'] !== 'all') {
+            $query->where('status', $filters['status']);
+        }
+
+        if (!empty($filters['type']) && $filters['type'] !== 'all') {
+            if (is_numeric($filters['type'])) {
+                $query->where('project_type_id', (int) $filters['type']);
+            } else {
+                $query->whereHas('type', fn(Builder $tq) => $tq->where('name', $filters['type']));
+            }
+        }
+
+        if (!empty($filters['client']) && $filters['client'] !== 'all') {
+            if (is_numeric($filters['client'])) {
+                $query->where('client_id', (int) $filters['client']);
+            } else {
+                $query->whereHas('client', fn(Builder $cq) => $cq->where('name', $filters['client']));
+            }
+        }
+
+        return $query
+            ->with($isDraft ? ['client:id,name', 'type:id,name'] : $this->indexRelations())
+            ->withCount(['items', 'employees'])
+            ->latest($isArchived ? 'archived_at' : 'created_at')
+            ->paginate($perPage)
+            ->withQueryString();
+    }
+
+    /**
+     * Lightweight relations for project cards — zero N+1.
      */
     private function indexRelations(): array
     {
@@ -117,7 +174,7 @@ class ProjectRepository implements ProjectRepositoryInterface
             'items.workItem.category',
             'items' => fn($q) => $q->withSum('dailyProgress', 'quantity'),
             'items.dailyProgress' => fn($q) => $q->orderBy('progress_date', 'desc')->limit(5)->with('employee'),
-            'dailyProgress.employee'
+            'dailyProgress.employee',
         ]);
     }
 }

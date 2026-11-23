@@ -26,7 +26,7 @@ class DailyProgressController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $query = DailyProgress::with(['project', 'projectItem.dailyProgresses', 'projectItem.workItem.category', 'projectItem.subproject', 'employee']);
+        $query = DailyProgress::with(['project:id,name', 'projectItem.workItem.category', 'projectItem.subproject', 'employee:id,name,user_id']);
 
         // استبعاد المشاريع المسودة (draft) والمؤرشفة (archived)
         $query->whereHas('project', function ($q) {
@@ -54,7 +54,7 @@ class DailyProgressController extends Controller
             }
         } else {
             // الأدمن والمدير يشوفوا كل المشاريع (غير المسودة وغير المؤرشفة)
-            $projects = Project::where('is_draft', false)->where('is_archived', false)->select('id', 'name')->get();
+            $projects = Project::where('is_draft', false)->where('is_archived', false)->select('id', 'name')->latest('id')->limit(500)->get();
         }
 
         // فلترة التاريخ (من - إلى)

@@ -24,14 +24,17 @@ class ProjectDashboardController extends Controller
      */
     public function dashboard(Project $project, Request $request)
     {
-        $project = $this->projectRepository->getProjectWithProgress($project);
-
         $project->load([
             'subprojects',
             'items.workItem.category',
             'items.subproject',
             'client',
-            'employees',
+            'employees' => fn($q) => $q->withSum([
+                'dailyProgress as project_progress_sum' => fn($dq) => $dq->whereHas(
+                    'projectItem',
+                    fn($pq) => $pq->where('project_id', $project->id)
+                ),
+            ], 'quantity'),
             'type',
         ]);
 
@@ -77,14 +80,17 @@ class ProjectDashboardController extends Controller
      */
     public function dashboardPrint(Project $project, Request $request)
     {
-        $project = $this->projectRepository->getProjectWithProgress($project);
-
         $project->load([
             'subprojects',
             'items.workItem.category',
             'items.subproject',
             'client',
-            'employees',
+            'employees' => fn($q) => $q->withSum([
+                'dailyProgress as project_progress_sum' => fn($dq) => $dq->whereHas(
+                    'projectItem',
+                    fn($pq) => $pq->where('project_id', $project->id)
+                ),
+            ], 'quantity'),
             'type',
         ]);
 
@@ -230,6 +236,7 @@ class ProjectDashboardController extends Controller
             ->with(['projectItem.workItem.category', 'employee'])
             ->orderBy('progress_date', 'desc')
             ->orderBy('created_at', 'desc')
+            ->limit(150)
             ->get()
             ->groupBy(function ($progress) {
                 $date = $progress->progress_date;

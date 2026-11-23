@@ -32,35 +32,60 @@ class ProjectController extends Controller
     /**
      * عرض قائمة المشاريع النشطة
      */
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
+        $isPrivileged = $user->hasRole('admin') || $user->hasRole('manager');
 
-        $projects = ($user->hasRole('admin') || $user->hasRole('manager'))
-            ? $this->projectRepository->getAllActive()
-            : $this->projectRepository->getByUserId($user->id, false, false);
+        $filters = [
+            'search' => $request->input('search'),
+            'status' => $request->input('status'),
+            'type'   => $request->input('type'),
+            'client' => $request->input('client'),
+        ];
 
-        $draftsCount = ($user->hasRole('admin') || $user->hasRole('manager'))
-            ? Project::where('is_draft', true)->where('is_archived', false)->count()
-            : Project::where('is_draft', true)->where('is_archived', false)->whereHas('employees', fn($q) => $q->where('user_id', $user->id))->count();
+        $projects = $this->projectRepository->paginateFiltered(
+            $filters,
+            $isPrivileged ? null : $user->id,
+            false,
+            false,
+            24
+        );
 
-        $archivedCount = ($user->hasRole('admin') || $user->hasRole('manager'))
-            ? Project::where('is_archived', true)->count()
-            : Project::where('is_archived', true)->whereHas('employees', fn($q) => $q->where('user_id', $user->id))->count();
+        // Single conditional SQL pass for drafts & archived counts
+        $countQuery = Project::query();
+        if (!$isPrivileged) {
+            $countQuery->whereHas('employees', fn($q) => $q->where('user_id', $user->id));
+        }
+        $counts = $countQuery->selectRaw('
+            SUM(CASE WHEN is_draft = 1 AND is_archived = 0 THEN 1 ELSE 0 END) as drafts_cnt,
+            SUM(CASE WHEN is_archived = 1 THEN 1 ELSE 0 END) as archived_cnt
+        ')->first();
 
-        return view('projects.index', compact('projects', 'draftsCount', 'archivedCount'));
+        $draftsCount   = (int) ($counts->drafts_cnt ?? 0);
+        $archivedCount = (int) ($counts->archived_cnt ?? 0);
+
+        $filterTypes   = ProjectType::select('id', 'name')->orderBy('name')->get();
+        $filterClients = Client::select('id', 'name')->orderBy('name')->get();
+
+        return view('projects.index', compact('projects', 'draftsCount', 'archivedCount', 'filterTypes', 'filterClients'));
     }
 
     /**
      * عرض قائمة المسودات
      */
-    public function drafts()
+    public function drafts(Request $request)
     {
         $user = Auth::user();
+        $isPrivileged = $user->hasRole('admin') || $user->hasRole('manager');
 
-        $drafts = ($user->hasRole('admin') || $user->hasRole('manager'))
-            ? $this->projectRepository->getAllDrafts()
-            : $this->projectRepository->getByUserId($user->id, true, false);
+        $drafts = $this->projectRepository->paginateFiltered(
+            ['search' => $request->input('search')],
+            $isPrivileged ? null : $user->id,
+            true,
+            false,
+            25
+        );
 
         return view('projects.drafts', compact('drafts'));
     }
@@ -70,12 +95,12 @@ class ProjectController extends Controller
      */
     public function create()
     {
-        $clients       = Client::orderBy('name')->get();
-        $workItems     = WorkItem::with('category')->orderBy('name')->get();
+        $clients       = Client::select('id', 'name')->orderBy('name')->get();
+        $workItems     = WorkItem::select('id', 'name', 'unit', 'category_id', 'description')->with('category:id,name')->orderBy('name')->get();
         $employees     = $this->employeeRepository->getAll();
-        $templates     = ProjectTemplate::withCount('items')->orderBy('name')->get();
-        $projectTypes  = ProjectType::orderBy('name')->get();
-        $categories    = WorkItemCategory::with('workItems')->orderBy('name')->get();
+        $templates     = ProjectTemplate::select('id', 'name', 'description')->withCount('items')->orderBy('name')->get();
+        $projectTypes  = ProjectType::select('id', 'name')->orderBy('name')->get();
+        $categories    = WorkItemCategory::select('id', 'name')->orderBy('name')->get();
         $projectItems  = collect([]);
         $subprojects   = collect([]);
 
@@ -111,7 +136,7 @@ class ProjectController extends Controller
     {
         $project = $this->projectRepository->getProjectWithProgress($project);
 
-        $project->load([
+        $project->loadMissing([
             'subprojects',
             'items.workItem.category',
             'items.subproject',
@@ -120,22 +145,32 @@ class ProjectController extends Controller
             'type',
         ]);
 
+        $recentDailyProgress = $project->dailyProgress()
+            ->with(['employee:id,name', 'projectItem.workItem:id,name,unit'])
+            ->orderByDesc('progress_date')
+            ->orderByDesc('daily_progress.id')
+            ->limit(10)
+            ->get();
+
+        $dailyProgressCount = $project->dailyProgress()->count();
+
         $itemsBySubproject = $project->items->groupBy(
             fn($item) => $item->subproject_name ?? __('general.without_subproject')
         );
 
         $overallProgress = $project->overall_progress;
-        $workItems       = WorkItem::with('category')->orderBy('name')->get();
-        $employees       = $this->employeeRepository->getAll();
-        $categories      = WorkItemCategory::with('workItems')->orderBy('name')->get();
 
         // جلب المشاريع الفرعية التي لها بنود (عبر Service)
-        $subprojectService  = app(\App\Services\ProjectSubprojectService::class);
+        $subprojectService    = app(\App\Services\ProjectSubprojectService::class);
         $subprojectsWithItems = $subprojectService->getSubprojectsWithItems($project);
 
         return view('projects.show', compact(
-            'project', 'itemsBySubproject', 'workItems',
-            'employees', 'categories', 'overallProgress', 'subprojectsWithItems'
+            'project',
+            'itemsBySubproject',
+            'overallProgress',
+            'subprojectsWithItems',
+            'recentDailyProgress',
+            'dailyProgressCount'
         ));
     }
 
@@ -146,12 +181,12 @@ class ProjectController extends Controller
     {
         $project->load(['items.workItem.category', 'employees', 'subprojects']);
 
-        $clients      = Client::orderBy('name')->get();
-        $workItems    = WorkItem::with('category')->orderBy('name')->get();
+        $clients      = Client::select('id', 'name')->orderBy('name')->get();
+        $workItems    = WorkItem::select('id', 'name', 'unit', 'category_id', 'description')->with('category:id,name')->orderBy('name')->get();
         $employees    = $this->employeeRepository->getAll();
-        $templates    = ProjectTemplate::withCount('items')->orderBy('name')->get();
-        $projectTypes = ProjectType::orderBy('name')->get();
-        $categories   = WorkItemCategory::with('workItems')->orderBy('name')->get();
+        $templates    = ProjectTemplate::select('id', 'name', 'description')->withCount('items')->orderBy('name')->get();
+        $projectTypes = ProjectType::select('id', 'name')->orderBy('name')->get();
+        $categories   = WorkItemCategory::select('id', 'name')->orderBy('name')->get();
         $projectItems = $project->items;
         $subprojects  = $project->subprojects;
 
@@ -376,15 +411,30 @@ class ProjectController extends Controller
     /**
      * عرض قائمة المشاريع المؤرشفة
      */
-    public function archived()
+    public function archived(Request $request)
     {
         $user = Auth::user();
+        $isPrivileged = $user->hasRole('admin') || $user->hasRole('manager');
 
-        $projects = ($user->hasRole('admin') || $user->hasRole('manager'))
-            ? $this->projectRepository->getAllArchived()
-            : $this->projectRepository->getByUserId($user->id, false, true);
+        $filters = [
+            'search' => $request->input('search'),
+            'status' => $request->input('status'),
+            'type'   => $request->input('type'),
+            'client' => $request->input('client'),
+        ];
 
-        return view('projects.archived', compact('projects'));
+        $projects = $this->projectRepository->paginateFiltered(
+            $filters,
+            $isPrivileged ? null : $user->id,
+            false,
+            true,
+            24
+        );
+
+        $filterTypes   = ProjectType::select('id', 'name')->orderBy('name')->get();
+        $filterClients = Client::select('id', 'name')->orderBy('name')->get();
+
+        return view('projects.archived', compact('projects', 'filterTypes', 'filterClients'));
     }
 
     /**

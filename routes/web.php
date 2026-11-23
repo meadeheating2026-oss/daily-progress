@@ -264,6 +264,7 @@ Route::post('/categories', [CategoryController::class, 'store'])->name('categori
 Route::resource('categories', CategoryController::class)->except(['show']);
 Route::post('/work-items/reorder', [WorkItemController::class, 'reorder'])->name('work-items.reorder')->middleware('auth');
 Route::get('/work-items/search-ajax', [WorkItemController::class, 'search'])->name('work-items.search')->middleware('auth');
+Route::post('/work-items/store-ajax', [WorkItemController::class, 'storeAjax'])->name('work-items.store-ajax')->middleware('auth');
 
 // Include test routes
 if (app()->environment(['local', 'testing'])) {

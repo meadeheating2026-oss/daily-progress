@@ -10,260 +10,196 @@ use App\Models\Employee;
 use App\Models\ProjectType;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
-
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-public function index(Request $request)
-{
-    try {
-        // قاعدة الاستعلام الأساسية
-        $query = Project::query()->where('is_draft', false)->where('is_archived', false);
+    public function index(Request $request)
+    {
+        try {
+            $query = Project::query()
+                ->where('is_draft', false)
+                ->where('is_archived', false);
 
-    // فلترة حسب الحالة
-    if ($request->filled('status') && $request->status != 'all') {
-        $query->where('status', $request->status);
-    }
+            if ($request->filled('status') && $request->status !== 'all') {
+                $query->where('status', $request->status);
+            }
 
-    // فلترة حسب الموظف
-    if ($request->filled('employee_id')) {
-        $query->whereHas('employees', function($q) use ($request) {
-            $q->where('employees.id', $request->employee_id);
-        });
-    }
+            if ($request->filled('employee_id')) {
+                $query->whereHas('employees', function ($q) use ($request) {
+                    $q->where('employees.id', $request->employee_id);
+                });
+            }
 
-    // فلترة حسب نوع المشروع
-    if ($request->filled('type_id')) {
-        $query->where('project_type_id', $request->type_id);
-    }
+            if ($request->filled('type_id')) {
+                $query->where('project_type_id', $request->type_id);
+            }
 
-    // فلترة حسب المشروع المحدد
-    if ($request->filled('project_id')) {
-        $query->where('id', $request->project_id);
-    }
+            if ($request->filled('project_id')) {
+                $query->where('id', $request->project_id);
+            }
 
-    // فلترة حسب البند
-    if ($request->filled('item_id')) {
-        $query->whereHas('items', function($q) use ($request) {
-            $q->where('work_item_id', $request->item_id);
-        });
-    }
+            if ($request->filled('item_id')) {
+                $query->whereHas('items', function ($q) use ($request) {
+                    $q->where('work_item_id', $request->item_id);
+                });
+            }
 
-    // فلترة حسب النطاق الزمني
-    if ($request->filled('date_range') && is_numeric($request->date_range)) {
-        $query->where('created_at', '>=', now()->subDays((int)$request->date_range));
-    }
+            if ($request->filled('date_range') && is_numeric($request->date_range)) {
+                $query->where('created_at', '>=', now()->subDays((int) $request->date_range));
+            }
 
-    // جلب المشاريع مع حساب التقدم
-    // استخدام الدالة الموحدة من Project Model
-    $projects = $query->with(['items'])->get()->map(function ($project) {
-        $project->progress = $project->overall_progress;
-        $project->total_quantity = $project->items->sum('total_quantity');
-        return $project;
-    });
+            // 1. Single SQL GROUP BY query for status breakdown & total count (O(1) memory even at 10,000+ projects)
+            $statusRows = (clone $query)
+                ->selectRaw('status, COUNT(*) as cnt')
+                ->groupBy('status')
+                ->pluck('cnt', 'status');
 
-    // الحسابات العامة بناءً على الفلاتر
-    $filteredProjects = $projects;
-    $progress = $this->calculateFilteredProgress($filteredProjects);
-    $itemsCount = WorkItem::count();
-    $dailyFormsCount = DailyProgress::distinct('progress_date')->count();
-    $projectsCount = (clone $query)->count();
-    $teamMembersCount = Employee::count();
+            $activeCount    = (int) ($statusRows['active'] ?? 0);
+            $completedCount = (int) ($statusRows['completed'] ?? 0);
+            $pendingCount   = (int) ($statusRows['pending'] ?? 0);
+            $projectsCount  = (int) $statusRows->sum();
+            $projectStatusData = [$activeCount, $completedCount, $pendingCount];
 
-    // بيانات المخططات بناءً على الفلاتر
-    $projectProgressData = $this->getProjectProgressData(clone $query);
-    $projectStatusData = $this->getProjectStatusData(clone $query);
-    $plannedVsActualData = $this->getPlannedVsActualData(clone $query);
-    // باقي البيانات للفلترة
-    $teamMembers = Employee::all();
-    $projectTypes = ProjectType::all();
-    $allProjects = Project::all();
-    $allItems = WorkItem::all();
+            // 2. Single SQL covering-index aggregate for overall filtered progress (zero Eloquent hydration)
+            $agg = ProjectItem::query()
+                ->whereIn('project_id', (clone $query)->select('projects.id'))
+                ->where('is_measurable', true)
+                ->selectRaw('COALESCE(SUM(total_quantity), 0) as total_qty, COALESCE(SUM(completed_quantity), 0) as completed_qty')
+                ->first();
 
-    // إذا كان الطلب AJAX، إرجاع بيانات JSON
-    if ($request->ajax()) {
-        return response()->json([
-            'itemsCount' => $itemsCount,
-            'dailyFormsCount' => $dailyFormsCount,
-            'projectsCount' => $projectsCount,
-            'progress' => $progress,
-            'projectProgressData' => $projectProgressData,
-            'plannedVsActualData' => $plannedVsActualData,
-            'projectStatusData' => $projectStatusData,
-            'projects' => $projects->map(function($project) {
+            $progress = ($agg && (float) $agg->total_qty > 0)
+                ? (int) round(((float) $agg->completed_qty / (float) $agg->total_qty) * 100)
+                : 0;
+
+            // 3. Load only the latest 30 matching projects with eager-loaded subprojects & minimal item columns (zero N+1)
+            $projects = (clone $query)
+                ->select(['id', 'name', 'start_date', 'end_date', 'status', 'created_at'])
+                ->with([
+                    'subprojects:id,project_id,name,weight,sort_order',
+                    'items:id,project_id,subproject_name,total_quantity,completed_quantity,is_measurable',
+                ])
+                ->latest('created_at')
+                ->limit(30)
+                ->get()
+                ->map(function ($project) {
+                    $project->progress = $project->overall_progress;
+                    $project->total_quantity = $project->items->sum('total_quantity');
+                    return $project;
+                });
+
+            // Build chart datasets directly from the already-loaded collection (zero extra DB queries)
+            $labels  = [];
+            $data    = [];
+            $planned = [];
+            $actual  = [];
+            $today   = Carbon::today();
+
+            foreach ($projects as $project) {
+                $actualPct = (int) round($project->progress ?? 0);
+
+                $plannedPct = 0;
+                if ($project->start_date && $project->end_date) {
+                    $startDate = Carbon::parse($project->start_date);
+                    $endDate   = Carbon::parse($project->end_date);
+                    if ($today->greaterThanOrEqualTo($endDate)) {
+                        $plannedPct = 100;
+                    } elseif ($today->greaterThanOrEqualTo($startDate)) {
+                        $totalDays  = max(1, $startDate->diffInDays($endDate));
+                        $daysPassed = $startDate->diffInDays($today);
+                        $plannedPct = (int) min(100, round(($daysPassed / $totalDays) * 100));
+                    }
+                }
+
+                $labels[]  = $project->name;
+                $data[]    = $actualPct;
+                $planned[] = $plannedPct;
+                $actual[]  = $actualPct;
+            }
+
+            $projectProgressData = ['labels' => $labels, 'data' => $data];
+            $plannedVsActualData = ['labels' => $labels, 'planned' => $planned, 'actual' => $actual];
+
+            // 4. Short-cached global KPI counters & lightweight base-query filter lists
+            $globalCounts = Cache::remember('dashboard_global_counts_v1', 60, function () {
                 return [
-                    'id' => $project->id,
-                    'name' => $project->name,
-                    'start_date' => $project->start_date,
-                    'end_date' => $project->end_date,
-                    'progress' => $project->progress,
-                    'status' => $project->status
+                    'itemsCount'       => WorkItem::count(),
+                    'dailyFormsCount'  => DailyProgress::distinct('progress_date')->count('progress_date'),
+                    'teamMembersCount' => Employee::count(),
                 ];
-            })
-        ]);
-    }
+            });
 
-    return view('dashboard', compact(
-        'progress',
-        'itemsCount',
-        'dailyFormsCount',
-        'projectsCount',
-        'projectProgressData',
-        'projectStatusData',
-        'projects',
-        'teamMembers',
-        'projectTypes',
-        'allProjects',
-        'allItems',
-        'request',
-         'plannedVsActualData', // Add this line
-        'teamMembersCount'
-    ));
-    
-    } catch (\Exception $e) {
-        if ($request->ajax()) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Error occurred while filtering: ' . $e->getMessage()
-            ], 500);
-        }
-        
-        return back()->with('error', 'Error occurred: ' . $e->getMessage());
-    }
-}
-private function getPlannedVsActualData($query = null)
-{
-    $projects = $query ? $query->with(['items', 'dailyProgress'])->get() : Project::with(['items', 'dailyProgress'])->get();
+            $itemsCount       = $globalCounts['itemsCount'];
+            $dailyFormsCount  = $globalCounts['dailyFormsCount'];
+            $teamMembersCount = $globalCounts['teamMembersCount'];
 
-    $labels = [];
-    $planned = [];
-    $actual = [];
-
-    foreach ($projects as $project) {
-        // Calculate actual progress
-        $totalQuantity = $project->items->sum('total_quantity');
-        $completedQuantity = $project->dailyProgress->sum('quantity');
-        $actualProgress = $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100) : 0;
-
-        // Calculate planned progress based on timeline
-        $plannedProgress = 0;
-        if ($project->start_date && $project->end_date) {
-            $startDate = Carbon::parse($project->start_date);
-            $endDate = Carbon::parse($project->end_date);
-            $today = Carbon::today();
-
-            if ($today->greaterThanOrEqualTo($endDate)) {
-                $plannedProgress = 100;
-            } elseif ($today->greaterThanOrEqualTo($startDate)) {
-                $totalDays = $startDate->diffInDays($endDate);
-                $daysPassed = $startDate->diffInDays($today);
-                $plannedProgress = min(100, round(($daysPassed / $totalDays) * 100));
+            if ($request->ajax()) {
+                return response()->json([
+                    'itemsCount'          => $itemsCount,
+                    'dailyFormsCount'     => $dailyFormsCount,
+                    'projectsCount'       => $projectsCount,
+                    'progress'            => $progress,
+                    'projectProgressData' => $projectProgressData,
+                    'plannedVsActualData' => $plannedVsActualData,
+                    'projectStatusData'   => $projectStatusData,
+                    'projects'            => $projects->map(fn($project) => [
+                        'id'         => $project->id,
+                        'name'       => $project->name,
+                        'start_date' => $project->start_date,
+                        'end_date'   => $project->end_date,
+                        'progress'   => $project->progress,
+                        'status'     => $project->status,
+                    ]),
+                ]);
             }
-        }
 
-        $labels[] = $project->name;
-        $planned[] = $plannedProgress;
-        $actual[] = $actualProgress;
-    }
+            $filterDropdowns = Cache::remember('dashboard_filter_lists_v1', 60, function () {
+                return [
+                    'teamMembers'  => DB::table('employees')->select('id', 'name')->orderBy('name')->get(),
+                    'projectTypes' => DB::table('project_types')->select('id', 'name')->orderBy('name')->get(),
+                    'allItems'     => DB::table('work_items')->select('id', 'name')->orderBy('name')->get(),
+                    'allProjects'  => DB::table('projects')
+                        ->whereNull('deleted_at')
+                        ->where('is_draft', false)
+                        ->where('is_archived', false)
+                        ->select('id', 'name')
+                        ->orderByDesc('id')
+                        ->limit(500)
+                        ->get(),
+                ];
+            });
 
-    return [
-        'labels' => $labels,
-        'planned' => $planned,
-        'actual' => $actual
-    ];
-}
-private function getProjectProgressData($query = null)
-{
-    $projects = $query ? $query->with(['items', 'dailyProgress'])->get() : Project::with(['items', 'dailyProgress'])->get();
+            $teamMembers  = $filterDropdowns['teamMembers'];
+            $projectTypes = $filterDropdowns['projectTypes'];
+            $allItems     = $filterDropdowns['allItems'];
+            $allProjects  = $filterDropdowns['allProjects'];
 
-    $labels = [];
-    $data = [];
-
-    foreach ($projects as $project) {
-        $totalQuantity = $project->items->sum('total_quantity');
-        $completedQuantity = $project->dailyProgress->sum('quantity');
-
-        $labels[] = $project->name;
-        $data[] = $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100) : 0;
-    }
-
-    return [
-        'labels' => $labels,
-        'data' => $data
-    ];
-}
-
-private function getProjectStatusData($query = null)
-{
-    if ($query) {
-        $active = (clone $query)->where('status', 'active')->count();
-        $completed = (clone $query)->where('status', 'completed')->count();
-        $pending = (clone $query)->where('status', 'pending')->count();
-    } else {
-        $active = Project::where('status', 'active')->count();
-        $completed = Project::where('status', 'completed')->count();
-        $pending = Project::where('status', 'pending')->count();
-    }
-
-    return [$active, $completed, $pending];
-}
-    private function calculateOverallProgress()
-    {
-        // ✅ فقط project items (ليس template items)
-        $totalQuantity = ProjectItem::whereNotNull('project_id')->sum('total_quantity');
-        // استخدام completed_quantity المخزن بدلاً من إعادة الحساب من daily_progress
-        $completedQuantity = ProjectItem::whereNotNull('project_id')->sum('completed_quantity');
-
-        return $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100) : 0;
-    }
-
-    private function calculateFilteredProgress($projects)
-    {
-        if ($projects->isEmpty()) {
-            return 0;
-        }
-        
-        $totalQuantity = $projects->sum('total_quantity');
-        $completedQuantity = 0;
-        
-        // استخدام completed_quantity المخزن من البنود بدلاً من daily_progress
-        foreach ($projects as $project) {
-            if ($project->items) {
-                $completedQuantity += $project->items->sum('completed_quantity');
+            return view('dashboard', compact(
+                'progress',
+                'itemsCount',
+                'dailyFormsCount',
+                'projectsCount',
+                'projectProgressData',
+                'projectStatusData',
+                'projects',
+                'teamMembers',
+                'projectTypes',
+                'allProjects',
+                'allItems',
+                'request',
+                'plannedVsActualData',
+                'teamMembersCount'
+            ));
+        } catch (\Exception $e) {
+            if ($request->ajax()) {
+                return response()->json([
+                    'error'   => true,
+                    'message' => 'Error occurred while filtering: ' . $e->getMessage(),
+                ], 500);
             }
+
+            return back()->with('error', 'Error occurred: ' . $e->getMessage());
         }
-
-        return $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100) : 0;
     }
-    // private function getProjectProgressData()
-    // {
-    //     $projects = Project::with(['items', 'dailyProgress'])->get();
-
-    //     $labels = [];
-    //     $data = [];
-
-    //     foreach ($projects as $project) {
-    //         $totalQuantity = $project->items->sum('total_quantity');
-    //         $completedQuantity = $project->dailyProgress->sum('quantity');
-
-    //         $labels[] = $project->name;
-    //         $data[] = $totalQuantity > 0 ? round(($completedQuantity / $totalQuantity) * 100) : 0;
-    //     }
-
-    //     return [
-    //         'labels' => $labels,
-    //         'data' => $data
-    //     ];
-    // }
-
-    // private function getProjectStatusData()
-    // {
-    //     return [
-    //         Project::where('status', 'active')->count(),
-    //         Project::where('status', 'completed')->count(),
-    //         Project::where('status', 'pending')->count()
-    //     ];
-    // }
 }

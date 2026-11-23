@@ -19,9 +19,6 @@ class SetLocale
         // 3. مشاركة المتغيرات مع الـ views
         $this->shareViewVariables($locale);
 
-        // 4. تسجيل معلومات للتصحيح
-        $this->logDebugInfo($locale);
-
         return $next($request);
     }
 

@@ -30,7 +30,7 @@ class ProjectChartService implements ProjectChartServiceInterface
             ->orderBy('date')
             ->get();
 
-        $project->load(['items.workItem', 'subprojects']);
+        $project->loadMissing(['items.workItem', 'subprojects']);
 
         $workItemsFlat         = [];
         $completionPercentages = [];

@@ -3,6 +3,7 @@
 namespace App\Contracts;
 
 use App\Models\Project;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 /**
@@ -21,6 +22,14 @@ interface ProjectRepositoryInterface
     public function getAllArchived(): Collection;
 
     public function getByUserId(int $userId, bool $isDraft = false, bool $isArchived = false): Collection;
+
+    public function paginateFiltered(
+        array $filters = [],
+        ?int $userId = null,
+        bool $isDraft = false,
+        bool $isArchived = false,
+        int $perPage = 24
+    ): LengthAwarePaginator;
 
     public function create(array $data): Project;
 

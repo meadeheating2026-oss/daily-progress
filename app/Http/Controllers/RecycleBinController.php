@@ -15,13 +15,13 @@ class RecycleBinController extends Controller
 {
     public function index()
     {
-        $deletedProjects = Project::onlyTrashed()->get();
-        $deletedDailyProgress = DailyProgress::onlyTrashed()->get();
-        $deletedClients = Client::onlyTrashed()->get();
-        $deletedEmployees = Employee::onlyTrashed()->get();
-        $deletedWorkItems = WorkItem::onlyTrashed()->get();
-        $deletedTemplates = ProjectTemplate::onlyTrashed()->get();
-        $deletedTypes = ProjectType::onlyTrashed()->get();
+        $deletedProjects = Project::onlyTrashed()->latest('deleted_at')->limit(100)->get();
+        $deletedDailyProgress = DailyProgress::onlyTrashed()->latest('deleted_at')->limit(100)->get();
+        $deletedClients = Client::onlyTrashed()->latest('deleted_at')->limit(100)->get();
+        $deletedEmployees = Employee::onlyTrashed()->latest('deleted_at')->limit(100)->get();
+        $deletedWorkItems = WorkItem::onlyTrashed()->latest('deleted_at')->limit(100)->get();
+        $deletedTemplates = ProjectTemplate::onlyTrashed()->latest('deleted_at')->limit(100)->get();
+        $deletedTypes = ProjectType::onlyTrashed()->latest('deleted_at')->limit(100)->get();
 
         return view('recycle-bin.index', compact(
             'deletedProjects',

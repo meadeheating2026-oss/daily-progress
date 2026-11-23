@@ -73,6 +73,60 @@ class WorkItemController extends Controller
             ->with('success', 'Work item added successfully');
     }
 
+    /**
+     * AJAX endpoint to create a new WorkItem (and optional category) directly from Project Form
+     */
+    public function storeAjax(Request $request)
+    {
+        $validated = $request->validate([
+            'name'              => 'required|string|max:255',
+            'unit'              => 'required|string|max:255',
+            'description'       => 'nullable|string',
+            'category_id'       => 'nullable|exists:work_item_categories,id',
+            'new_category_name' => 'nullable|string|max:255',
+        ]);
+
+        $categoryId = $validated['category_id'] ?? null;
+        if (empty($categoryId) && !empty($validated['new_category_name'])) {
+            $category = WorkItemCategory::firstOrCreate([
+                'name' => trim($validated['new_category_name']),
+            ]);
+            $categoryId = $category->id;
+        }
+
+        if (empty($categoryId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'الرجاء اختيار الفئة أو إدخال اسم فئة جديدة',
+            ], 422);
+        }
+
+        $nextOrder = ((int) WorkItem::max('order')) + 1;
+
+        $workItem = new WorkItem([
+            'name'        => trim($validated['name']),
+            'unit'        => trim($validated['unit']),
+            'description' => $validated['description'] ?? null,
+            'category_id' => $categoryId,
+        ]);
+        $workItem->order = $nextOrder;
+        $workItem->save();
+        $workItem->load('category:id,name');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم إضافة بند العمل بنجاح إلى قائمة Work Items',
+            'item'    => [
+                'id'          => $workItem->id,
+                'name'        => $workItem->name,
+                'unit'        => $workItem->unit,
+                'category'    => $workItem->category?->name ?? '',
+                'category_id' => $workItem->category_id,
+                'description' => $workItem->description ?? '',
+            ],
+        ]);
+    }
+
     public function show(WorkItem $workItem)
     {
         return view('work-items.show', compact('workItem'));

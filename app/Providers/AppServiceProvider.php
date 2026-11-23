@@ -41,15 +41,20 @@ class AppServiceProvider extends ServiceProvider
             return "<?php echo App\Helpers\LocaleHelper::isRTL() ? 'rtl' : 'ltr'; ?>";
         });
         
-        // مشاركة متغيرات اللغة مع جميع الصفحات
-        view()->composer('*', function ($view) {
+        // مشاركة متغيرات اللغة مع جميع الصفحات مرة واحدة لكل طلب
+        $sharedOnce = false;
+        view()->composer('*', function () use (&$sharedOnce) {
+            if ($sharedOnce) {
+                return;
+            }
+            $sharedOnce = true;
             $currentLocale = session('locale', config('app.locale', 'ar'));
-            $view->with('currentLocale', $currentLocale);
-            $view->with('isRTL', $currentLocale === 'ar');
-            $view->with('direction', $currentLocale === 'ar' ? 'rtl' : 'ltr');
-            
-            // تعيين اللغة للتطبيق
             app()->setLocale($currentLocale);
+            \Illuminate\Support\Facades\View::share([
+                'currentLocale' => $currentLocale,
+                'isRTL'         => $currentLocale === 'ar',
+                'direction'     => $currentLocale === 'ar' ? 'rtl' : 'ltr',
+            ]);
         });
         
         // تسجيل Observers لتسجيل الأنشطة

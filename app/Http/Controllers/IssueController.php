@@ -40,14 +40,10 @@ class IssueController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $query = Issue::with(['project', 'reporter', 'assignedUser', 'comments', 'attachments']);
+        $query = Issue::with(['project:id,name', 'reporter:id,name', 'assignedUser:id,name']);
 
-        // Filter by user's accessible projects (non-draft only)
-        $userProjects = $this->getUserProjects($user);
-        if ($userProjects->isNotEmpty()) {
-            $query->whereIn('project_id', $userProjects->pluck('id'));
-        } else {
-            // If user has no projects, show no issues
+        // Filter by user's accessible projects via SQL subquery (scales to 10,000+ projects without 10,000 bind params)
+        if (!$this->applyAccessibleProjectsScope($query, $user)) {
             $query->whereRaw('1 = 0');
         }
 
@@ -89,13 +85,9 @@ class IssueController extends Controller
             });
         }
 
-        // Get filter options - Filter projects based on user role and exclude drafts
-        $user = Auth::user();
-        $projects = $this->getUserProjects($user);
-
-        // Get statistics filtered by user's projects
+        $projects = $this->getUserProjects($user, 500);
         $statistics = $this->getStatistics($user);
-        $users = User::orderBy('name')->get();
+        $users = User::select('id', 'name')->orderBy('name')->get();
         $modules = Issue::whereNotNull('module')
             ->distinct()
             ->pluck('module')
@@ -103,8 +95,7 @@ class IssueController extends Controller
             ->sort()
             ->values();
 
-        // Paginate results
-        $issues = $query->orderBy('created_at', 'desc')->paginate(15);
+        $issues = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
         return view('issues.index', compact('issues', 'statistics', 'projects', 'users', 'modules'));
     }
@@ -115,14 +106,9 @@ class IssueController extends Controller
     public function kanban(Request $request)
     {
         $user = Auth::user();
-        $query = Issue::with(['project', 'reporter', 'assignedUser']);
+        $query = Issue::with(['project:id,name', 'reporter:id,name', 'assignedUser:id,name']);
 
-        // Filter by user's accessible projects (non-draft only)
-        $userProjects = $this->getUserProjects($user);
-        if ($userProjects->isNotEmpty()) {
-            $query->whereIn('project_id', $userProjects->pluck('id'));
-        } else {
-            // If user has no projects, show no issues
+        if (!$this->applyAccessibleProjectsScope($query, $user)) {
             $query->whereRaw('1 = 0');
         }
 
@@ -139,18 +125,16 @@ class IssueController extends Controller
             $query->where('assigned_to', $request->assigned_to);
         }
 
-        // Group issues by status
+        // Group issues by status (capped per column so 10,000 projects never freeze the browser)
         $issuesByStatus = [
-            'New' => (clone $query)->where('status', 'New')->orderBy('priority', 'desc')->orderBy('created_at', 'desc')->get(),
-            'In Progress' => (clone $query)->where('status', 'In Progress')->orderBy('priority', 'desc')->orderBy('updated_at', 'desc')->get(),
-            'Testing' => (clone $query)->where('status', 'Testing')->orderBy('priority', 'desc')->orderBy('updated_at', 'desc')->get(),
-            'Closed' => (clone $query)->where('status', 'Closed')->orderBy('updated_at', 'desc')->get(),
+            'New' => (clone $query)->where('status', 'New')->orderBy('priority', 'desc')->orderBy('created_at', 'desc')->limit(100)->get(),
+            'In Progress' => (clone $query)->where('status', 'In Progress')->orderBy('priority', 'desc')->orderBy('updated_at', 'desc')->limit(100)->get(),
+            'Testing' => (clone $query)->where('status', 'Testing')->orderBy('priority', 'desc')->orderBy('updated_at', 'desc')->limit(100)->get(),
+            'Closed' => (clone $query)->where('status', 'Closed')->orderBy('updated_at', 'desc')->limit(100)->get(),
         ];
 
-        // Get filter options - Filter projects based on user role and exclude drafts
-        $user = Auth::user();
-        $projects = $this->getUserProjects($user);
-        $users = User::orderBy('name')->get();
+        $projects = $this->getUserProjects($user, 500);
+        $users = User::select('id', 'name')->orderBy('name')->get();
 
         return view('issues.kanban', compact('issuesByStatus', 'projects', 'users'));
     }
@@ -416,87 +400,107 @@ class IssueController extends Controller
     private function getStatistics(?User $user = null): array
     {
         $user = $user ?? Auth::user();
-        
-        // Get user's accessible projects (non-draft only)
-        $userProjects = $this->getUserProjects($user);
-        $projectIds = $userProjects->pluck('id')->toArray();
-        
-        // Helper function to build base query
-        $getBaseQuery = function() use ($projectIds) {
-            $query = Issue::whereHas('project', function ($q) {
-                $q->where('is_draft', false);
-            });
-            
-            if (!empty($projectIds)) {
-                $query->whereIn('project_id', $projectIds);
-            } else {
-                $query->whereRaw('1 = 0');
-            }
-            
-            return $query;
-        };
-        
+
+        $baseQuery = Issue::query();
+        if (!$this->applyAccessibleProjectsScope($baseQuery, $user)) {
+            return [
+                'total_open'   => 0,
+                'total_closed' => 0,
+                'by_status'    => ['New' => 0, 'In Progress' => 0, 'Testing' => 0, 'Closed' => 0],
+                'by_priority'  => ['Low' => 0, 'Medium' => 0, 'High' => 0, 'Urgent' => 0],
+                'overdue'      => 0,
+                'by_project'   => collect([]),
+            ];
+        }
+
+        // Single SQL pass instead of 11 separate COUNT(*) queries
+        $totals = (clone $baseQuery)->selectRaw("
+            SUM(CASE WHEN status != 'Closed' THEN 1 ELSE 0 END) as total_open,
+            SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END) as total_closed,
+            SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as st_new,
+            SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) as st_in_progress,
+            SUM(CASE WHEN status = 'Testing' THEN 1 ELSE 0 END) as st_testing,
+            SUM(CASE WHEN priority = 'Low' THEN 1 ELSE 0 END) as pr_low,
+            SUM(CASE WHEN priority = 'Medium' THEN 1 ELSE 0 END) as pr_medium,
+            SUM(CASE WHEN priority = 'High' THEN 1 ELSE 0 END) as pr_high,
+            SUM(CASE WHEN priority = 'Urgent' THEN 1 ELSE 0 END) as pr_urgent,
+            SUM(CASE WHEN deadline IS NOT NULL AND deadline < ? AND status != 'Closed' THEN 1 ELSE 0 END) as overdue_cnt
+        ", [now()])->first();
+
+        $byProject = (clone $baseQuery)
+            ->selectRaw('project_id, COUNT(*) as count')
+            ->groupBy('project_id')
+            ->orderByDesc('count')
+            ->limit(25)
+            ->with('project:id,name')
+            ->get()
+            ->map(fn($item) => [
+                'project_name' => $item->project->name ?? 'N/A',
+                'count'        => (int) $item->count,
+            ]);
+
         return [
-            'total_open' => (clone $getBaseQuery())->open()->count(),
-            'total_closed' => (clone $getBaseQuery())->byStatus('Closed')->count(),
-            'by_status' => [
-                'New' => (clone $getBaseQuery())->byStatus('New')->count(),
-                'In Progress' => (clone $getBaseQuery())->byStatus('In Progress')->count(),
-                'Testing' => (clone $getBaseQuery())->byStatus('Testing')->count(),
-                'Closed' => (clone $getBaseQuery())->byStatus('Closed')->count(),
+            'total_open'   => (int) ($totals->total_open ?? 0),
+            'total_closed' => (int) ($totals->total_closed ?? 0),
+            'by_status'    => [
+                'New'         => (int) ($totals->st_new ?? 0),
+                'In Progress' => (int) ($totals->st_in_progress ?? 0),
+                'Testing'     => (int) ($totals->st_testing ?? 0),
+                'Closed'      => (int) ($totals->total_closed ?? 0),
             ],
-            'by_priority' => [
-                'Low' => (clone $getBaseQuery())->byPriority('Low')->count(),
-                'Medium' => (clone $getBaseQuery())->byPriority('Medium')->count(),
-                'High' => (clone $getBaseQuery())->byPriority('High')->count(),
-                'Urgent' => (clone $getBaseQuery())->byPriority('Urgent')->count(),
+            'by_priority'  => [
+                'Low'    => (int) ($totals->pr_low ?? 0),
+                'Medium' => (int) ($totals->pr_medium ?? 0),
+                'High'   => (int) ($totals->pr_high ?? 0),
+                'Urgent' => (int) ($totals->pr_urgent ?? 0),
             ],
-            'overdue' => (clone $getBaseQuery())
-                ->whereNotNull('deadline')
-                ->where('deadline', '<', now())
-                ->where('status', '!=', 'Closed')
-                ->count(),
-            'by_project' => (clone $getBaseQuery())
-                ->selectRaw('project_id, COUNT(*) as count')
-                ->groupBy('project_id')
-                ->with('project:id,name')
-                ->get()
-                ->map(function($item) {
-                    return [
-                        'project_name' => $item->project->name ?? 'N/A',
-                        'count' => $item->count
-                    ];
-                }),
+            'overdue'      => (int) ($totals->overdue_cnt ?? 0),
+            'by_project'   => $byProject,
         ];
     }
 
     /**
-     * Get projects based on user role and permissions
-     * - Excludes draft projects
-     * - Returns only user's projects for employees
-     * - Returns all non-draft projects for admin/manager
+     * Constrain an Issue query to non-draft, non-archived projects accessible by $user using SQL subqueries (no 10,000-ID IN list).
      */
-    private function getUserProjects(User $user)
+    private function applyAccessibleProjectsScope($query, User $user): bool
     {
-        // Start with non-draft and non-archived projects only
-        $query = Project::where('is_draft', false)->where('is_archived', false)->orderBy('name');
-
-        // If user is not admin or manager, filter by user's projects
-        if (!$user->hasRole('admin') && !$user->hasRole('manager')) {
-            // Get user's employee record
-            $employee = Employee::where('user_id', $user->id)->first();
-            
-            if ($employee) {
-                // Get only projects assigned to this employee
-                $query->whereHas('employees', function ($q) use ($employee) {
-                    $q->where('employee_id', $employee->id);
-                });
-            } else {
-                // If no employee record, return empty collection
-                return collect([]);
-            }
+        if ($user->hasRole('admin') || $user->hasRole('manager')) {
+            $query->whereHas('project', function ($q) {
+                $q->where('is_draft', false)->where('is_archived', false);
+            });
+            return true;
         }
 
-        return $query->get();
+        $employeeId = Employee::where('user_id', $user->id)->value('id');
+        if (!$employeeId) {
+            return false;
+        }
+
+        $query->whereHas('project', function ($q) use ($employeeId) {
+            $q->where('is_draft', false)
+              ->where('is_archived', false)
+              ->whereHas('employees', fn($eq) => $eq->where('employees.id', $employeeId));
+        });
+        return true;
+    }
+
+    private function getUserProjects(User $user, int $limit = 500)
+    {
+        $query = Project::where('is_draft', false)
+            ->where('is_archived', false)
+            ->select('id', 'name')
+            ->orderBy('name');
+
+        if (!$user->hasRole('admin') && !$user->hasRole('manager')) {
+            $employeeId = Employee::where('user_id', $user->id)->value('id');
+            if (!$employeeId) {
+                return collect([]);
+            }
+            $query->whereHas('employees', function ($q) use ($employeeId) {
+                $q->where('employees.id', $employeeId);
+            });
+        }
+
+        return $query->limit($limit)->get();
     }
 }
