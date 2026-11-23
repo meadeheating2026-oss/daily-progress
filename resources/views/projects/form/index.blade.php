@@ -42,9 +42,15 @@
         'unit' => data_get($workItem, 'unit'),
         'category' => data_get($workItem, 'category.name'),
         'category_id' => data_get($workItem, 'category_id'),
+        'description' => data_get($workItem, 'description'),
     ];
 
     $formWorkItems = collect($workItems)->map($formWorkItem)->values();
+
+    $formCategories = collect($categories ?? [])->map(fn($cat) => [
+        'id' => data_get($cat, 'id'),
+        'name' => data_get($cat, 'name'),
+    ])->values();
 
     $formProjectItems = collect($projectItems)->map(fn($item) => [
         'id' => data_get($item, 'id'),
@@ -69,6 +75,7 @@
 <script>
     window.projectFormData = <?php echo json_encode([
                                     'workItems' => $formWorkItems,
+                                    'categories' => $formCategories,
                                     'project' => $project ? ['id' => data_get($project, 'id')] : null,
                                     'projectItems' => $formProjectItems,
                                     'subprojects' => $subprojectsArray
@@ -528,9 +535,9 @@
         </div>
         <div class="card-body">
             
-            <div class="row mb-3">
+            <div class="row g-3 mb-3 align-items-start">
                 
-                <div class="col-md-4">
+                <div class="col-lg-4 col-md-6">
                     <div class="input-group">
                         <span class="input-group-text">
                             <i class="fas fa-filter"></i>
@@ -541,83 +548,118 @@
                             placeholder="{{ __('general.filter_items') }}">
                         <button type="button"
                             id="reset-filter"
-                            class="btn btn-outline-secondary">
+                            class="btn btn-outline-secondary"
+                            title="مسح الفلتر">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                 </div>
 
                 
-                <div class="col-md-3 text-center">
+                <div class="col-lg-3 col-md-6 text-center d-flex justify-content-center align-items-center gap-2 flex-wrap">
                     <div class="btn-group" role="group" aria-label="View mode">
                         <button type="button"
                             class="btn btn-outline-primary active"
                             id="flat-view-btn"
                             title="عرض عادي">
-                            <i class="fas fa-list"></i> عادي
+                            <i class="fas fa-list me-1"></i> عادي
                         </button>
                         <button type="button"
                             class="btn btn-outline-primary"
                             id="grouped-view-btn"
-                            title="عرض حسب الفئات">
-                            <i class="fas fa-layer-group"></i> مجمع
+                            title="عرض مجمع حسب المشروع الفرعي">
+                            <i class="fas fa-layer-group me-1"></i> مجمع
                         </button>
                     </div>
+                    <button type="button"
+                        class="btn btn-sm btn-outline-secondary d-none"
+                        id="toggle-all-groups-btn"
+                        data-expanded="0"
+                        title="توسيع أو طي كل المجموعات">
+                        <i class="fas fa-angles-down me-1"></i> <span>توسيع الكل</span>
+                    </button>
                 </div>
 
                 
-                <div class="col-md-5">
+                <div class="col-lg-5 col-md-12">
                     <div class="input-group">
                         <span class="input-group-text">
                             <i class="fas fa-tasks"></i>
                         </span>
                         <select class="form-select" id="bulk-action-select">
                             <option value="">-- عمليات جماعية --</option>
-                            <option value="delete">🗑️ حذف المحدد</option>
-                            <option value="duplicate">📋 نسخ المحدد</option>
+                            <option value="edit-item-name">✏️ تعديل اسم البند (Item Name)</option>
                             <option value="move">📁 نقل لمشروع فرعي</option>
+                            <option value="duplicate">📋 نسخ المحدد</option>
+                            <option value="set-duration">⏱️ تعيين مدة موحدة</option>
+                            <option value="clear-notes">🧹 مسح الملاحظات</option>
                             <option value="export">📊 تصدير المحدد (CSV)</option>
+                            <option value="delete">🗑️ حذف المحدد</option>
                         </select>
                         <button type="button"
-                            class="btn btn-primary"
+                            class="btn btn-primary fw-semibold px-3"
                             id="bulk-execute-btn"
                             title="تنفيذ العملية المحددة">
-                            <i class="fas fa-play"></i>
+                            <i class="fas fa-play me-1"></i>
                             تنفيذ
                         </button>
                     </div>
-                    <small class="text-muted d-block mt-1">
-                        <i class="fas fa-info-circle me-1"></i>
-                        حدد البنود أولاً ثم اختر العملية
-                    </small>
+                    <div class="d-flex justify-content-between align-items-center mt-1 flex-wrap gap-2">
+                        <small class="text-muted" id="bulk-helper-hint">
+                            <i class="fas fa-info-circle me-1"></i>
+                            <span>حدد بنداً أو أكثر (يدعم Shift+Click) ثم اختر العملية أو اسحبهم معاً</span>
+                        </small>
+                        <span id="global-selected-count-wrap" class="d-none">
+                            <span class="badge bg-primary" id="global-selected-count-badge">0 محدد</span>
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-decoration-none" id="clear-global-selection-btn">إلغاء التحديد</button>
+                        </span>
+                    </div>
                 </div>
             </div>
 
     
             <div class="table-responsive items-table-scroll">
                 <table class="table table-bordered table-hover align-middle" id="selected-items-table">
-                    <thead class="table-primary">
+                    <colgroup class="kon-items-colgroup">
+                        <col style="width: 42px;">
+                        <col style="width: 42px;">
+                        <col style="width: 56px;">
+                        <col style="width: 300px;">
+                        <col style="width: 190px;">
+                        <col style="width: 300px;">
+                        <col style="width: 100px;">
+                        <col style="width: 125px;">
+                        <col style="width: 125px;">
+                        <col style="width: 100px;">
+                        <col style="width: 180px;">
+                        <col style="width: 145px;">
+                        <col style="width: 95px;">
+                        <col style="width: 140px;">
+                        <col style="width: 140px;">
+                        <col style="width: 130px;">
+                    </colgroup>
+                    <thead>
                         <tr>
-                            <th style="width: 40px;">
-                                <input type="checkbox" id="selectAllItems" class="form-check-input">
+                            <th class="text-center">
+                                <input type="checkbox" id="selectAllItems" class="form-check-input" title="تحديد الكل">
                             </th>
-                            <th style="width: 40px;" class="text-center">
+                            <th class="text-center">
                                 <i class="fas fa-grip-vertical"></i>
                             </th>
-                            <th style="width: 50px;" class="text-center">#</th>
-                            <th style="min-width: 300px;">{{ __('general.item_name') }}</th>
-                            <th style="min-width: 200px;">المشروع الفرعي</th>
-                            <th style="min-width: 350px;">{{ __('general.notes') }}</th>
-                            <th style="width: 100px;" class="text-center">قابل للقياس</th>
-                            <th style="width: 120px;">{{ __('general.total_quantity') }}</th>
-                            <th style="width: 120px;">{{ __('general.estimated_daily_qty') }}</th>
-                            <th style="width: 100px;">{{ __('general.estimated_duration') }}</th>
-                            <th style="width: 150px;">{{ __('general.predecessor') }}</th>
-                            <th style="width: 150px;">{{ __('general.dependency_type') }}</th>
-                            <th style="width: 100px;">{{ __('general.lag') }}</th>
-                            <th style="width: 140px;">{{ __('general.start_date') }}</th>
-                            <th style="width: 140px;">{{ __('general.end_date') }}</th>
-                            <th style="width: 100px;" class="text-center">{{ __('general.actions') }}</th>
+                            <th class="text-center">#</th>
+                            <th>{{ __('general.item_name') }}</th>
+                            <th>المشروع الفرعي</th>
+                            <th>{{ __('general.notes') }}</th>
+                            <th class="text-center">قابل للقياس</th>
+                            <th>{{ __('general.total_quantity') }}</th>
+                            <th>{{ __('general.estimated_daily_qty') }}</th>
+                            <th>{{ __('general.estimated_duration') }}</th>
+                            <th>{{ __('general.predecessor') }}</th>
+                            <th>{{ __('general.dependency_type') }}</th>
+                            <th>{{ __('general.lag') }}</th>
+                            <th>{{ __('general.start_date') }}</th>
+                            <th>{{ __('general.end_date') }}</th>
+                            <th class="text-center">{{ __('general.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody id="selected-items-container" class="sortable-table">
@@ -808,8 +850,6 @@
 
 </div>
 
-
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
 <!-- Modal for Save as Template -->
 <div class="modal fade" id="saveAsTemplateModal" tabindex="-1" aria-labelledby="saveAsTemplateModalLabel" aria-hidden="true">
@@ -1064,7 +1104,186 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<script type="module" src="{{ asset('js/project-form.js') }}"></script>
+<!-- jQuery Popup Modal: Edit / Create Work Item (Item Name) for Selected Rows -->
+<div class="modal fade" id="editWorkItemModal" tabindex="-1" aria-labelledby="editWorkItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title d-flex align-items-center gap-2 text-white" id="editWorkItemModalLabel">
+                    <i class="fas fa-pen-to-square"></i>
+                    <span>تعديل اسم البند (Item Name)</span>
+                    <span class="badge bg-light text-dark ms-2" id="editWorkItemTargetBadge">0 صف محدد</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-pills nav-fill gap-2 mb-3" id="editWorkItemTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-semibold"
+                                id="tab-btn-existing-item"
+                                data-bs-toggle="pill"
+                                data-bs-target="#pane-existing-item"
+                                type="button"
+                                role="tab">
+                            <i class="fas fa-list-ul me-1"></i> اختيار بند موجود بالفعل
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-semibold"
+                                id="tab-btn-create-item"
+                                data-bs-toggle="pill"
+                                data-bs-target="#pane-create-item"
+                                type="button"
+                                role="tab">
+                            <i class="fas fa-plus-circle me-1"></i> إضافة بند جديد في Work Items
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- Pane 1: Pick Existing Work Item -->
+                    <div class="tab-pane fade show active" id="pane-existing-item" role="tabpanel">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-7">
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                    <input type="text"
+                                           id="modalWorkItemSearch"
+                                           class="form-control"
+                                           placeholder="ابحث بالاسم أو الوحدة أو الوصف..."
+                                           autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <select id="modalWorkItemCategoryFilter" class="form-select">
+                                    <option value="">كل الفئات (Categories)</option>
+                                    @foreach(($categories ?? []) as $cat)
+                                        <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="fw-semibold" style="color: var(--ink-2);">
+                                اضغط على البند لاختياره (أو نقرتين متتاليتين للتطبيق الفوري):
+                            </small>
+                            <span class="badge bg-primary" id="modalWorkItemsCountLabel">0 بند</span>
+                        </div>
+
+                        <div class="kon-workitem-list" id="modalWorkItemsList"></div>
+                    </div>
+
+                    <!-- Pane 2: Create New Work Item (saves to work_items table + applies to selected rows) -->
+                    <div class="tab-pane fade" id="pane-create-item" role="tabpanel">
+                        <div class="alert alert-info py-2 small mb-3">
+                            <i class="fas fa-info-circle me-1"></i>
+                            البند الجديد سيتم حفظه مباشرة في سجل <strong>Work Items</strong> وتطبيقه فوراً على الصفوف المحددة.
+                        </div>
+
+                        <div id="createWorkItemError" class="alert alert-danger py-2 small d-none"></div>
+
+                        <div class="row g-3">
+                            <div class="col-md-7">
+                                <label class="form-label fw-bold">{{ __('general.item_name') }} <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-tag"></i></span>
+                                    <input type="text" id="newWorkItemName" class="form-control" placeholder="أدخل اسم البند الجديد">
+                                </div>
+                            </div>
+
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">{{ __('general.unit_of_measurement') }} <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-ruler"></i></span>
+                                    <input type="text" id="newWorkItemUnit" class="form-control" list="commonUnitsDatalist" placeholder="مثال: m2, m3, ton, nos.">
+                                    <datalist id="commonUnitsDatalist">
+                                        <option value="m">
+                                        <option value="m2">
+                                        <option value="m3">
+                                        <option value="ton">
+                                        <option value="kg">
+                                        <option value="nos.">
+                                        <option value="nr">
+                                        <option value="item">
+                                        <option value="LS">
+                                    </datalist>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">{{ __('general.category') }} <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-layer-group"></i></span>
+                                    <select id="newWorkItemCategory" class="form-select">
+                                        <option value="">{{ __('general.choose_category') }}</option>
+                                        @foreach(($categories ?? []) as $cat)
+                                            <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                                        @endforeach
+                                        <option value="__new__">+ إضافة فئة جديدة...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12 d-none" id="newWorkItemNewCategoryWrap">
+                                <label class="form-label fw-bold">اسم الفئة الجديدة <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-folder-plus"></i></span>
+                                    <input type="text" id="newWorkItemNewCategoryName" class="form-control" placeholder="أدخل اسم الفئة الجديدة">
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">{{ __('general.description') }}</label>
+                                <textarea id="newWorkItemDescription" class="form-control" rows="3" placeholder="وصف اختياري للبند..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> إلغاء
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary" id="confirmSelectWorkItemBtn">
+                        <i class="fas fa-check me-1"></i> تطبيق البند المختار
+                    </button>
+                    <button type="button" class="btn btn-success d-none" id="confirmCreateWorkItemBtn">
+                        <i class="fas fa-save me-1"></i> حفظ في Work Items وتطبيق على المحدد
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Group-Level Bulk Operations (Grouped Mode) -->
+<div class="modal fade" id="groupBulkModal" tabindex="-1" aria-labelledby="groupBulkModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title d-flex align-items-center gap-2 text-white" id="groupBulkModalLabel">
+                    <i class="fas fa-layer-group"></i>
+                    <span id="groupBulkModalTitleText">عملية على المجموعات</span>
+                    <span class="badge bg-light ms-2" id="groupBulkTargetBadge">0 مجموعة</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="groupBulkModalBody"></div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> إلغاء
+                </button>
+                <button type="button" class="btn btn-primary fw-semibold" id="confirmGroupBulkBtn">
+                    <i class="fas fa-check me-1"></i> تطبيق على المجموعات المحددة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="{{ asset('js/project-form.js') }}?v=6"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

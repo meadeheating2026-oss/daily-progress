@@ -41,90 +41,87 @@
     
     <div class="card shadow-sm border-0 mb-4" style="border-radius: 20px;">
         <div class="card-body p-4">
-            <div class="row g-3 align-items-end">
-                
-                <div class="col-lg-4 col-md-6 col-sm-12">
-                    <label class="form-label text-muted small mb-2">
-                        <i class="fas fa-search me-2"></i>{{ __('general.search') }}
-                    </label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light border-0" style="border-radius: 12px 0 0 12px;">
-                            <i class="fas fa-search text-muted"></i>
-                        </span>
-                        <input type="text" 
-                               id="projectSearch" 
-                               class="form-control border-0 bg-light" 
-                               placeholder="{{ __('general.search_by_name_or_client') }}"
-                               style="border-radius: 0 12px 12px 0;">
+            <form method="GET"
+                  action="{{ route('projects.index') }}"
+                  id="projectsFilterForm"
+                  data-server-filter="{{ ($projects->hasPages() || request()->hasAny(['search', 'status', 'type', 'client'])) ? '1' : '0' }}">
+                <div class="row g-3 align-items-end">
+                    
+                    <div class="col-lg-4 col-md-6 col-sm-12">
+                        <label class="form-label text-muted small mb-2">
+                            <i class="fas fa-search me-2"></i>{{ __('general.search') }}
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-0" style="border-radius: 12px 0 0 12px;">
+                                <i class="fas fa-search text-muted"></i>
+                            </span>
+                            <input type="text" 
+                                   id="projectSearch" 
+                                   name="search"
+                                   value="{{ request('search') }}"
+                                   class="form-control border-0 bg-light" 
+                                   placeholder="{{ __('general.search_by_name_or_client') }}"
+                                   style="border-radius: 0 12px 12px 0;">
+                        </div>
+                    </div>
+
+                    
+                    <div class="col-lg-2 col-md-6 col-sm-12">
+                        <label class="form-label text-muted small mb-2">
+                            <i class="fas fa-filter me-2"></i>{{ __('general.status') }}
+                        </label>
+                        <select id="projectStatusFilter" name="status" class="form-select border-0 bg-light" style="border-radius: 12px;">
+                            <option value="all">{{ __('general.all_statuses') }}</option>
+                            <option value="active" @selected(request('status') === 'active')>{{ __('general.active') }}</option>
+                            <option value="completed" @selected(request('status') === 'completed')>{{ __('general.completed') }}</option>
+                            <option value="pending" @selected(request('status') === 'pending')>{{ __('general.pending') }}</option>
+                        </select>
+                    </div>
+
+                    
+                    <div class="col-lg-3 col-md-6 col-sm-12">
+                        <label class="form-label text-muted small mb-2">
+                            <i class="fas fa-tag me-2"></i>{{ __('general.type_of_project') }}
+                        </label>
+                        <select id="projectTypeFilter" name="type" class="form-select border-0 bg-light" style="border-radius: 12px;">
+                            <option value="all">{{ __('general.all_types') }}</option>
+                            @foreach(($filterTypes ?? collect()) as $type)
+                                <option value="{{ $type->name }}" @selected(request('type') == $type->name || request('type') == $type->id)>{{ $type->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    
+                    <div class="col-lg-2 col-md-6 col-sm-12">
+                        <label class="form-label text-muted small mb-2">
+                            <i class="fas fa-building me-2"></i>{{ __('projects.client') }}
+                        </label>
+                        <select id="projectClientFilter" name="client" class="form-select border-0 bg-light" style="border-radius: 12px;">
+                            <option value="all">{{ __('general.all_clients') }}</option>
+                            @foreach(($filterClients ?? collect()) as $client)
+                                <option value="{{ $client->name }}" @selected(request('client') == $client->name || request('client') == $client->id)>{{ $client->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    
+                    <div class="col-lg-1 col-md-6 col-sm-12">
+                        <button type="button" 
+                                id="clearFilters" 
+                                class="btn btn-outline-secondary w-100" 
+                                title="{{ __('general.clear_filters') }}"
+                                style="border-radius: 12px;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <div class="text-center mt-2">
+                            <small class="text-muted">
+                                <span id="filterResults">{{ $projects->total() }}</span> 
+                                <span>{{ __('general.results') }}</span>
+                            </small>
+                        </div>
                     </div>
                 </div>
-
-                
-                <div class="col-lg-2 col-md-6 col-sm-12">
-                    <label class="form-label text-muted small mb-2">
-                        <i class="fas fa-filter me-2"></i>{{ __('general.status') }}
-                    </label>
-                    <select id="projectStatusFilter" class="form-select border-0 bg-light" style="border-radius: 12px;">
-                        <option value="all">{{ __('general.all_statuses') }}</option>
-                        <option value="active">{{ __('general.active') }}</option>
-                        <option value="completed">{{ __('general.completed') }}</option>
-                        <option value="pending">{{ __('general.pending') }}</option>
-                    </select>
-                </div>
-
-                
-                <div class="col-lg-3 col-md-6 col-sm-12">
-                    <label class="form-label text-muted small mb-2">
-                        <i class="fas fa-tag me-2"></i>{{ __('general.type_of_project') }}
-                    </label>
-                    <select id="projectTypeFilter" class="form-select border-0 bg-light" style="border-radius: 12px;">
-                        <option value="all">{{ __('general.all_types') }}</option>
-                        @php
-                            $uniqueTypes = $projects->pluck('type')->filter()->unique('id');
-                        @endphp
-                        @foreach($uniqueTypes as $type)
-                            @if($type)
-                                <option value="{{ $type->name }}">{{ $type->name }}</option>
-                            @endif
-                        @endforeach
-                    </select>
-                </div>
-
-                
-                <div class="col-lg-2 col-md-6 col-sm-12">
-                    <label class="form-label text-muted small mb-2">
-                        <i class="fas fa-building me-2"></i>{{ __('projects.client') }}
-                    </label>
-                    <select id="projectClientFilter" class="form-select border-0 bg-light" style="border-radius: 12px;">
-                        <option value="all">{{ __('general.all_clients') }}</option>
-                        @php
-                            $uniqueClients = $projects->pluck('client')->filter()->unique('id');
-                        @endphp
-                        @foreach($uniqueClients as $client)
-                            @if($client)
-                                <option value="{{ $client->name }}">{{ $client->name }}</option>
-                            @endif
-                        @endforeach
-                    </select>
-                </div>
-
-                
-                <div class="col-lg-1 col-md-6 col-sm-12">
-                    <button type="button" 
-                            id="clearFilters" 
-                            class="btn btn-outline-secondary w-100" 
-                            title="{{ __('general.clear_filters') }}"
-                            style="border-radius: 12px;">
-                        <i class="fas fa-times"></i>
-                    </button>
-                    <div class="text-center mt-2">
-                        <small class="text-muted">
-                            <span id="filterResults">{{ $projects->count() }}</span> 
-                            <span>{{ __('general.results') }}</span>
-                        </small>
-                    </div>
-                </div>
-            </div>
+            </form>
         </div>
     </div>
 
@@ -315,7 +312,7 @@
     </style>
 
     <div class="row g-3 m-2 projects-grid">
-        @foreach ($projects as $project)
+        @forelse ($projects as $project)
             @php
                 $subprojectNamesWithItems = $project->items
                     ->pluck('subproject_name')
@@ -500,8 +497,22 @@
                     </div>
                 </div>
             </div>
-        @endforeach
+        @empty
+            <div class="col-12 text-center py-5">
+                <div class="alert alert-info border-0 shadow-sm" style="border-radius: 20px; padding: 2rem;">
+                    <i class="fas fa-search fa-3x mb-3 text-muted"></i>
+                    <h5 class="text-muted mb-2">لا توجد مشاريع مطابقة للبحث</h5>
+                    <p class="text-muted mb-0">جرب البحث بكلمات مختلفة أو غير الفلاتر</p>
+                </div>
+            </div>
+        @endforelse
     </div>
+
+    @if($projects->hasPages())
+        <div class="d-flex justify-content-center mt-4 mb-2">
+            {{ $projects->links('pagination::bootstrap-5') }}
+        </div>
+    @endif
 
     
     <div class="modal fade" id="saveAsTemplateModal" tabindex="-1">
@@ -1601,6 +1612,6 @@
     </script>
 
     
-    <script src="{{ asset('js/projects-filter.js') }}"></script>
+    <script src="{{ asset('js/projects-filter.js') }}?v=2"></script>
 @endsection
 

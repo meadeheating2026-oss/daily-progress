@@ -10,7 +10,7 @@ import {
     scheduleItems,
     workingDaysBetween
 } from './project-form/scheduler.js';
-import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotification, subprojectKey } from './project-form/utils.js';
+import { debounce, dismissNotificationByKey, escapeAttr, escapeHtml, formatDate, navigateToAlertTarget, parseLocalDate, showNotification, subprojectKey } from './project-form/utils.js?v=6';
 
 (function () {
     'use strict';
@@ -89,8 +89,17 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             elements.selectAllItems.addEventListener('change', toggleSelectAll);
         }
 
+        // Clear global selection link
+        document.getElementById('clear-global-selection-btn')?.addEventListener('click', clearAllSelections);
+
+        // Expand / Collapse all groups in Grouped mode
+        document.getElementById('toggle-all-groups-btn')?.addEventListener('click', toggleAllCategoryGroups);
+
         // Bulk execute button
         document.getElementById('bulk-execute-btn')?.addEventListener('click', executeBulkAction);
+
+        // Initialize jQuery Work Item Picker & Creator Modal
+        initEditWorkItemModal();
 
         // Move to subproject modal confirm button
         document.getElementById('confirmMoveBtn')?.addEventListener('click', function () {
@@ -215,8 +224,19 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             });
 
             elements.container.addEventListener('click', function (e) {
+                // Shift+Click range selection & selection UI sync on item checkboxes
+                if (e.target.classList?.contains('item-checkbox')) {
+                    handleItemCheckboxClick(e);
+                    return;
+                }
+
                 const row = e.target.closest?.('tr[data-item-id]');
                 if (!row) return;
+
+                if (e.target.closest('.edit-item-btn')) {
+                    openEditWorkItemModal([row]);
+                    return;
+                }
 
                 if (e.target.closest('.remove-btn')) {
                     if (confirm('هل أنت متأكد من حذف هذا البند؟')) {
@@ -225,6 +245,7 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
                         calculateAllDates();
                         updateEmptyState();
                         regroupIfNeeded();
+                        syncSelectionUI();
                         showNotification('info', 'تم الحذف بنجاح');
                     }
                     return;
@@ -232,6 +253,8 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
 
                 if (e.target.closest('.duplicate-btn')) {
                     duplicateItem(row, workItemForRow(row));
+                    regroupIfNeeded();
+                    syncSelectionUI();
                 }
             });
         }
@@ -478,23 +501,27 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             ? `<input type="hidden" name="items[${rowId}][id]" value="${existingData.id}">`
             : '';
 
+        tr.dataset.displayNumber = String(rowNumber + 1);
+
         tr.innerHTML = `
             <td class="text-center">
                 <input type="checkbox" class="form-check-input item-checkbox">
             </td>
-            <td class="text-center drag-handle" style="cursor: move;">
+            <td class="text-center drag-handle" style="cursor: move;" title="اسحب لتحريك الصف (أو حدد عدة صفوف واسحبهم معاً)">
                 <i class="fas fa-grip-vertical text-muted"></i>
                 <input type="hidden" name="items[${rowId}][item_order]" value="${rowNumber}">
             </td>
             <td class="text-center">
-                <span class="badge bg-primary">${rowNumber + 1}</span>
+                <span class="badge row-number-badge">${rowNumber + 1}</span>
             </td>
             <td>
                 <input type="hidden" name="items[${rowId}][work_item_id]" value="${item.id}">
                 ${itemIdInput}
-                <strong>${escapeHtml(item.name)}</strong>
-                ${item.category ? `<br><small class="text-muted"><i class="fas fa-folder me-1"></i>${escapeHtml(item.category)}</small>` : ''}
-                ${item.unit ? `<br><small class="text-muted"><i class="fas fa-ruler me-1"></i>${escapeHtml(item.unit)}</small>` : ''}
+                <div class="work-item-display">
+                    <strong class="item-name-text">${escapeHtml(item.name)}</strong>
+                    ${item.category ? `<br><small class="text-muted item-category-text"><i class="fas fa-folder me-1"></i>${escapeHtml(item.category)}</small>` : ''}
+                    ${item.unit ? `<br><small class="text-muted item-unit-text"><i class="fas fa-ruler me-1"></i>${escapeHtml(item.unit)}</small>` : ''}
+                </div>
             </td>
             <td>
                 <input type="text" 
@@ -557,6 +584,9 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             </td>
             <td class="text-center">
                 <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-primary edit-item-btn" title="تعديل اسم البند (Item Name)">
+                        <i class="fas fa-pen"></i>
+                    </button>
                     <button type="button" class="btn btn-outline-success duplicate-btn" title="نسخ">
                         <i class="fas fa-copy"></i>
                     </button>
@@ -836,11 +866,30 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             }
         });
 
+        refreshFixedRowNumbers();
         updatePredecessors();
+    }
+
+    /**
+     * Keep the # column strictly fixed (1, 2, 3, ...) in top-to-bottom visual order
+     * regardless of row drag/drop, duplication, deletion, or Flat/Grouped mode.
+     */
+    function refreshFixedRowNumbers() {
+        if (!elements.container) return;
+        const rows = elements.container.querySelectorAll('tr[data-item-id]');
+        rows.forEach((row, index) => {
+            const displayNum = index + 1;
+            row.dataset.displayNumber = String(displayNum);
+            const badge = row.querySelector('.row-number-badge') || row.querySelector('td:nth-child(3) .badge');
+            if (badge) {
+                badge.textContent = String(displayNum);
+            }
+        });
     }
 
     function updateItemOrders() {
         if (state.viewMode === 'grouped') {
+            syncFlatItemOrderAfterMutation();
             updateItemOrdersFromFlatOrder();
             return;
         }
@@ -853,18 +902,35 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         });
 
         captureFlatItemOrder(rows);
+        refreshFixedRowNumbers();
         updatePredecessors();
     }
 
-    // Every predecessor select can list every other row, so eagerly filling them all
-    // costs N*(N-1) option nodes. Instead each select holds only its blank and its
-    // selected option, and the full list is built for a single select on first use.
+    function getRowItemName(row) {
+        return (
+            row.querySelector('.item-name-text')?.textContent?.trim() ||
+            row.querySelector('td:nth-child(4) strong')?.textContent?.trim() ||
+            workItemForRow(row)?.name ||
+            'Item'
+        );
+    }
+
+    // Every predecessor select lists every other row with its exact current # number
+    // and current Item Name (works identically in both Flat and Grouped modes).
     function getPredecessorChoices() {
+        refreshFixedRowNumbers();
         const choices = [];
 
         elements.container.querySelectorAll('tr[data-item-id]').forEach((row, index) => {
-            const itemName = row.querySelector('td:nth-child(4) strong')?.textContent || 'Item';
-            choices.push({ id: row.dataset.itemId, label: `${index + 1}. ${itemName}` });
+            const num = row.dataset.displayNumber || String(index + 1);
+            const itemName = getRowItemName(row);
+            const subproject = state.viewMode === 'grouped'
+                ? row.querySelector('.subproject-input')?.value?.trim()
+                : '';
+            const label = subproject
+                ? `${num}. ${itemName} (${subproject})`
+                : `${num}. ${itemName}`;
+            choices.push({ id: row.dataset.itemId, label });
         });
 
         return choices;
@@ -910,11 +976,14 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         return select.value === value;
     }
 
-    function updatePredecessors() {
+    function updatePredecessors(explicitPredecessors = null) {
         const labels = new Map(getPredecessorChoices().map(choice => [choice.id, choice.label]));
 
         elements.container.querySelectorAll('.predecessor-select').forEach(select => {
-            const currentValue = select.value;
+            const ownRowId = select.closest('tr[data-item-id]')?.dataset.itemId;
+            const currentValue = (explicitPredecessors && ownRowId && explicitPredecessors.has(ownRowId))
+                ? explicitPredecessors.get(ownRowId)
+                : select.value;
 
             select.innerHTML = '';
             select.appendChild(new Option('بدون', ''));
@@ -1021,15 +1090,226 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         elements.itemsFilter.value = '';
         const rows = elements.container.querySelectorAll('tr[data-item-id]');
         rows.forEach(row => row.style.display = '');
-    }
-
-    function toggleSelectAll() {
-        const checkboxes = elements.container.querySelectorAll('.item-checkbox');
-        checkboxes.forEach(cb => cb.checked = elements.selectAllItems.checked);
+        elements.container.querySelectorAll('.category-group-row').forEach(group => group.style.display = '');
     }
 
     // ========================================
-    // Bulk Actions Execute
+    // Multi-Select (Flat + Grouped + Shift+Click)
+    // ========================================
+    let lastClickedCheckbox = null;
+    let lastClickedGroupCheckbox = null;
+
+    const ITEM_BULK_OPTIONS_HTML = `
+        <option value="">-- عمليات جماعية للبنود --</option>
+        <option value="edit-item-name">✏️ تعديل اسم البند (Item Name)</option>
+        <option value="move">📁 نقل لمشروع فرعي</option>
+        <option value="duplicate">📋 نسخ المحدد</option>
+        <option value="set-duration">⏱️ تعيين مدة موحدة</option>
+        <option value="clear-notes">🧹 مسح الملاحظات</option>
+        <option value="export">📊 تصدير المحدد (CSV)</option>
+        <option value="delete">🗑️ حذف المحدد</option>
+    `;
+
+    const GROUP_BULK_OPTIONS_HTML = `
+        <option value="">-- عمليات جماعية للمجموعات --</option>
+        <option value="rename-group">✏️ تعديل اسم المجموعة</option>
+        <option value="duplicate-groups">📋 نسخ المجموعات المحددة (بجميع بنودها)</option>
+        <option value="merge-groups">🔀 دمج المجموعات المحددة في مجموعة واحدة</option>
+        <option value="set-group-qty-unit">📦 تعيين الكمية والوحدة للمجموعات</option>
+        <option value="set-group-weight">⚖️ تعيين وزن موحد للمجموعات</option>
+        <option value="distribute-weights">⚖️ توزيع الوزن (100%) بالتساوي على المجموعات</option>
+        <option value="export-groups">📊 تصدير المجموعات المحددة (CSV)</option>
+        <option value="delete-groups">🗑️ حذف المجموعات المحددة بالكامل</option>
+    `;
+
+    const SHARED_COLGROUP_HTML = `
+        <colgroup class="kon-items-colgroup">
+            <col style="width: 42px;">
+            <col style="width: 42px;">
+            <col style="width: 56px;">
+            <col style="width: 300px;">
+            <col style="width: 190px;">
+            <col style="width: 300px;">
+            <col style="width: 100px;">
+            <col style="width: 125px;">
+            <col style="width: 125px;">
+            <col style="width: 100px;">
+            <col style="width: 180px;">
+            <col style="width: 145px;">
+            <col style="width: 95px;">
+            <col style="width: 140px;">
+            <col style="width: 140px;">
+            <col style="width: 130px;">
+        </colgroup>
+    `;
+
+    function syncBulkToolbarForViewMode() {
+        const actionSelect = document.getElementById('bulk-action-select');
+        const hintEl = document.querySelector('#bulk-helper-hint span');
+        if (actionSelect) {
+            actionSelect.innerHTML = state.viewMode === 'grouped'
+                ? GROUP_BULK_OPTIONS_HTML
+                : ITEM_BULK_OPTIONS_HTML;
+        }
+        if (hintEl) {
+            hintEl.textContent = state.viewMode === 'grouped'
+                ? 'حدد مجموعة أو أكثر لتنفيذ عملية جماعية على المجموعات (أو افتح المجموعة للعمليات على بنودها)'
+                : 'حدد بنداً أو أكثر (يدعم Shift+Click) ثم اختر العملية أو اسحبهم معاً';
+        }
+    }
+
+    function handleItemCheckboxClick(e) {
+        const currentCb = e.target;
+        const allVisibleCbs = Array.from(elements.container.querySelectorAll('.item-checkbox'))
+            .filter(cb => {
+                const tr = cb.closest('tr[data-item-id]');
+                return tr && tr.style.display !== 'none';
+            });
+
+        if (e.shiftKey && lastClickedCheckbox && lastClickedCheckbox !== currentCb) {
+            const startIdx = allVisibleCbs.indexOf(lastClickedCheckbox);
+            const endIdx = allVisibleCbs.indexOf(currentCb);
+            if (startIdx !== -1 && endIdx !== -1) {
+                const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+                for (let i = from; i <= to; i++) {
+                    allVisibleCbs[i].checked = currentCb.checked;
+                }
+            }
+        }
+
+        lastClickedCheckbox = currentCb;
+        syncSelectionUI();
+    }
+
+    function toggleSelectAll() {
+        const checked = !!elements.selectAllItems?.checked;
+
+        // In Grouped mode, top Select All selects/deselects whole Subproject Groups!
+        if (state.viewMode === 'grouped') {
+            document.querySelectorAll('.category-group-row').forEach(groupRow => {
+                if (groupRow.style.display === 'none') return;
+                const hCb = groupRow.querySelector('.group-header-checkbox');
+                if (hCb) hCb.checked = checked;
+            });
+            syncSelectionUI();
+            return;
+        }
+
+        const checkboxes = elements.container.querySelectorAll('.item-checkbox');
+        checkboxes.forEach(cb => {
+            const tr = cb.closest('tr[data-item-id]');
+            if (tr && tr.style.display !== 'none') {
+                cb.checked = checked;
+            }
+        });
+        syncSelectionUI();
+    }
+
+    function clearAllSelections() {
+        elements.container.querySelectorAll('.item-checkbox, .group-header-checkbox, .subproject-select-all').forEach(cb => {
+            cb.checked = false;
+            cb.indeterminate = false;
+        });
+        if (elements.selectAllItems) {
+            elements.selectAllItems.checked = false;
+            elements.selectAllItems.indeterminate = false;
+        }
+        syncSelectionUI();
+    }
+
+    function getSelectedGroups() {
+        return Array.from(document.querySelectorAll('.category-group-row'))
+            .filter(groupRow => groupRow.querySelector('.group-header-checkbox')?.checked);
+    }
+
+    function syncSelectionUI() {
+        if (!elements.container) return;
+
+        // Always sync item row highlight
+        const allItemCbs = Array.from(elements.container.querySelectorAll('.item-checkbox'));
+        let totalItemsChecked = 0;
+
+        allItemCbs.forEach(cb => {
+            const row = cb.closest('tr[data-item-id]');
+            if (row) {
+                row.classList.toggle('item-row-selected', cb.checked);
+            }
+            if (cb.checked) totalItemsChecked++;
+        });
+
+        const badgeWrap = document.getElementById('global-selected-count-wrap');
+        const badgeEl = document.getElementById('global-selected-count-badge');
+
+        if (state.viewMode === 'grouped') {
+            const allGroups = Array.from(document.querySelectorAll('.category-group-row'));
+            let checkedGroupsCount = 0;
+            let itemsInsideCheckedGroups = 0;
+
+            allGroups.forEach(groupRow => {
+                const header = groupRow.querySelector('.category-header');
+                const tbody = groupRow.querySelector('.sortable-category-items');
+                if (!header || !tbody) return;
+
+                const headerCb = groupRow.querySelector('.group-header-checkbox');
+                const isGroupChecked = !!headerCb?.checked;
+                groupRow.classList.toggle('group-row-selected', isGroupChecked);
+
+                const groupRowsCount = tbody.querySelectorAll('tr[data-item-id]').length;
+                if (isGroupChecked) {
+                    checkedGroupsCount++;
+                    itemsInsideCheckedGroups += groupRowsCount;
+                }
+
+                // Inner item checkboxes belong to the group's inner item toolbar
+                const categoryId = subprojectKey(header.dataset.category || '');
+                const groupCbs = Array.from(tbody.querySelectorAll('.item-checkbox'));
+                const groupItemChecked = groupCbs.filter(cb => cb.checked).length;
+
+                const innerSelectAll = groupRow.querySelector('.subproject-select-all');
+                if (innerSelectAll) {
+                    innerSelectAll.checked = groupCbs.length > 0 && groupItemChecked === groupCbs.length;
+                    innerSelectAll.indeterminate = groupItemChecked > 0 && groupItemChecked < groupCbs.length;
+                }
+                const countSpan = groupRow.querySelector(`.selected-count-${categoryId}`);
+                if (countSpan) {
+                    countSpan.textContent = groupItemChecked;
+                }
+            });
+
+            if (elements.selectAllItems) {
+                elements.selectAllItems.checked = allGroups.length > 0 && checkedGroupsCount === allGroups.length;
+                elements.selectAllItems.indeterminate = checkedGroupsCount > 0 && checkedGroupsCount < allGroups.length;
+            }
+
+            if (badgeWrap && badgeEl) {
+                if (checkedGroupsCount > 0) {
+                    badgeWrap.classList.remove('d-none');
+                    badgeEl.textContent = `${checkedGroupsCount} مجموعة محددة (${itemsInsideCheckedGroups} بند)`;
+                } else {
+                    badgeWrap.classList.add('d-none');
+                }
+            }
+            return;
+        }
+
+        // Flat Mode
+        if (elements.selectAllItems) {
+            elements.selectAllItems.checked = allItemCbs.length > 0 && totalItemsChecked === allItemCbs.length;
+            elements.selectAllItems.indeterminate = totalItemsChecked > 0 && totalItemsChecked < allItemCbs.length;
+        }
+
+        if (badgeWrap && badgeEl) {
+            if (totalItemsChecked > 0) {
+                badgeWrap.classList.remove('d-none');
+                badgeEl.textContent = `${totalItemsChecked} بند محدد`;
+            } else {
+                badgeWrap.classList.add('d-none');
+            }
+        }
+    }
+
+    // ========================================
+    // Bulk Actions Execute (Context-Aware: Items in Flat, Groups in Grouped)
     // ========================================
     function executeBulkAction() {
         const actionSelect = document.getElementById('bulk-action-select');
@@ -1040,15 +1320,28 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             return;
         }
 
-        const selectedRows = getSelectedRows();
-
-        if (selectedRows.length === 0) {
-            showNotification('warning', 'الرجاء تحديد بنود أولاً');
+        if (state.viewMode === 'grouped') {
+            const selectedGroups = getSelectedGroups();
+            if (selectedGroups.length === 0) {
+                showNotification('warning', 'الرجاء تحديد مجموعة واحدة أو أكثر من المربعات على رؤوس المجموعات');
+                return;
+            }
+            executeGroupBulkAction(action, selectedGroups);
+            if (actionSelect) actionSelect.value = '';
             return;
         }
 
-        // Execute the selected action
+        const selectedRows = getSelectedRows();
+
+        if (selectedRows.length === 0) {
+            showNotification('warning', 'الرجاء تحديد بند واحد أو أكثر أولاً');
+            return;
+        }
+
         switch (action) {
+            case 'edit-item-name':
+                openEditWorkItemModal(selectedRows);
+                break;
             case 'delete':
                 bulkDelete(selectedRows);
                 break;
@@ -1061,14 +1354,759 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             case 'export':
                 bulkExport(selectedRows);
                 break;
+            case 'clear-notes':
+                bulkClearNotes(selectedRows);
+                break;
+            case 'set-duration':
+                bulkSetDuration(selectedRows);
+                break;
             default:
                 showNotification('warning', 'عملية غير معروفة');
         }
 
-        // Reset select
         if (actionSelect) {
             actionSelect.value = '';
         }
+    }
+
+    // ========================================
+    // Group-Level Bulk Operations (Grouped Mode)
+    // ========================================
+    let activeGroupModalConfirmHandler = null;
+
+    function openGroupBulkModal({ title, countLabel, bodyHtml, onConfirm }) {
+        const modalEl = document.getElementById('groupBulkModal');
+        const titleEl = document.getElementById('groupBulkModalTitleText');
+        const badgeEl = document.getElementById('groupBulkTargetBadge');
+        const bodyEl = document.getElementById('groupBulkModalBody');
+        const confirmBtn = document.getElementById('confirmGroupBulkBtn');
+        if (!modalEl || !bodyEl || !confirmBtn) return;
+
+        if (titleEl) titleEl.textContent = title;
+        if (badgeEl) badgeEl.textContent = countLabel;
+        bodyEl.innerHTML = bodyHtml;
+
+        if (activeGroupModalConfirmHandler) {
+            confirmBtn.removeEventListener('click', activeGroupModalConfirmHandler);
+        }
+        activeGroupModalConfirmHandler = () => {
+            const shouldClose = onConfirm();
+            if (shouldClose !== false) {
+                if (window.jQuery && typeof window.jQuery(modalEl).modal === 'function') {
+                    window.jQuery(modalEl).modal('hide');
+                } else if (typeof bootstrap !== 'undefined') {
+                    bootstrap.Modal.getInstance(modalEl)?.hide();
+                }
+            }
+        };
+        confirmBtn.addEventListener('click', activeGroupModalConfirmHandler);
+
+        if (window.jQuery && typeof window.jQuery(modalEl).modal === 'function') {
+            window.jQuery(modalEl).modal('show');
+        } else if (typeof bootstrap !== 'undefined') {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    }
+
+    function executeGroupBulkAction(action, selectedGroups) {
+        const groupNames = selectedGroups
+            .map(g => g.querySelector('.category-header')?.dataset.category || '')
+            .filter(Boolean);
+
+        switch (action) {
+            case 'rename-group': {
+                if (selectedGroups.length > 1) {
+                    showNotification('warning', 'لتعديل اسم مجموعة، حدد مجموعة واحدة فقط — أو استخدم "دمج المجموعات المحددة" لتوحيد أكثر من مجموعة تحت اسم واحد.');
+                    return;
+                }
+                const oldName = groupNames[0] || '';
+                openGroupBulkModal({
+                    title: 'تعديل اسم المجموعة',
+                    countLabel: 'مجموعة واحدة',
+                    bodyHtml: `
+                        <label class="form-label fw-bold">الاسم الجديد للمجموعة <span class="text-danger">*</span></label>
+                        <input type="text" id="groupModalRenameInput" class="form-control" value="${escapeAttr(oldName === 'بدون مشروع فرعي' ? '' : oldName)}" placeholder="أدخل اسم المجموعة الجديد">
+                    `,
+                    onConfirm: () => {
+                        const newName = document.getElementById('groupModalRenameInput')?.value?.trim() || '';
+                        if (!newName) {
+                            showNotification('warning', 'الرجاء إدخال اسم المجموعة الجديد');
+                            return false;
+                        }
+                        selectedGroups[0].querySelectorAll('tr[data-item-id] .subproject-input').forEach(inp => {
+                            inp.value = newName;
+                        });
+                        const oldIdx = state.subprojectOrder.indexOf(oldName);
+                        if (oldIdx !== -1) state.subprojectOrder[oldIdx] = newName;
+                        else ensureSubprojectInOrder(newName);
+                        if (state.subprojectEdits.has(oldName)) {
+                            state.subprojectEdits.set(newName, state.subprojectEdits.get(oldName));
+                            state.subprojectEdits.delete(oldName);
+                        }
+                        renderGroupedView();
+                        showNotification('success', `✅ تم تغيير اسم المجموعة إلى "${newName}"`);
+                        return true;
+                    }
+                });
+                break;
+            }
+
+            case 'duplicate-groups': {
+                const isSingle = selectedGroups.length === 1;
+                const suggested = isSingle ? `${groupNames[0]} - نسخة` : ' - نسخة';
+                openGroupBulkModal({
+                    title: 'نسخ المجموعات المحددة بجميع بنودها',
+                    countLabel: `${selectedGroups.length} مجموعة`,
+                    bodyHtml: isSingle
+                        ? `
+                            <p class="small mb-2" style="color: var(--ink-2);">سيتم نسخ جميع بنود المجموعة <strong>${escapeHtml(groupNames[0])}</strong> مع علاقات الاعتمادية الداخلية (Predecessors).</p>
+                            <label class="form-label fw-bold">اسم المجموعة الجديدة <span class="text-danger">*</span></label>
+                            <input type="text" id="groupModalDupName" class="form-control" value="${escapeAttr(suggested)}">
+                        `
+                        : `
+                            <p class="small mb-2" style="color: var(--ink-2);">سيتم نسخ <strong>${selectedGroups.length}</strong> مجموعات بكامل بنودها وإضافة اللاحقة التالية لأسمائها:</p>
+                            <label class="form-label fw-bold">لاحقة اسم النسخة الجديدة <span class="text-danger">*</span></label>
+                            <input type="text" id="groupModalDupSuffix" class="form-control" value=" - نسخة">
+                        `,
+                    onConfirm: () => {
+                        const singleTarget = document.getElementById('groupModalDupName')?.value?.trim();
+                        const suffix = document.getElementById('groupModalDupSuffix')?.value || ' - نسخة';
+                        if (isSingle && !singleTarget) {
+                            showNotification('warning', 'الرجاء إدخال اسم المجموعة الجديدة');
+                            return false;
+                        }
+
+                        let totalClonedItems = 0;
+                        selectedGroups.forEach(groupRow => {
+                            const origName = groupRow.querySelector('.category-header')?.dataset.category || 'مجموعة';
+                            const targetGroupName = isSingle ? singleTarget : `${origName}${suffix}`;
+                            ensureSubprojectInOrder(targetGroupName);
+
+                            const origRows = Array.from(groupRow.querySelectorAll('tr[data-item-id]'));
+                            const idMap = new Map();
+                            const createdPairs = [];
+
+                            origRows.forEach(origRow => {
+                                const newRow = insertDuplicate(origRow, workItemForRow(origRow));
+                                const spInput = newRow.querySelector('.subproject-input');
+                                if (spInput) spInput.value = targetGroupName;
+                                idMap.set(origRow.dataset.itemId, newRow.dataset.itemId);
+                                createdPairs.push({ origRow, newRow });
+                                totalClonedItems++;
+                            });
+
+                            // Copy subproject header metadata
+                            const origKey = subprojectKey(origName);
+                            const qtyVal = groupRow.querySelector(`.subproject-quantity-input-${origKey}`)?.value;
+                            const unitVal = groupRow.querySelector(`.subproject-unit-input-${origKey}`)?.value;
+                            const weightVal = groupRow.querySelector(`.subproject-weight-input-${origKey}`)?.value;
+                            state.subprojectEdits.set(targetGroupName, {
+                                totalQty: qtyVal,
+                                unit: unitVal,
+                                weight: weightVal
+                            });
+
+                            // Remap internal predecessors inside the cloned group
+                            createdPairs.forEach(({ origRow, newRow }) => {
+                                const origPred = origRow.querySelector('.predecessor-select')?.value || '';
+                                if (origPred) {
+                                    const mappedPred = idMap.get(origPred) || origPred;
+                                    const sel = newRow.querySelector('.predecessor-select');
+                                    if (sel) {
+                                        sel.appendChild(new Option(mappedPred, mappedPred));
+                                        sel.value = mappedPred;
+                                    }
+                                }
+                            });
+                        });
+
+                        syncFlatItemOrderAfterMutation();
+                        renderGroupedView();
+                        calculateAllDates();
+                        showNotification('success', `✅ تم نسخ ${selectedGroups.length} مجموعة (${totalClonedItems} بند) بنجاح`);
+                        return true;
+                    }
+                });
+                break;
+            }
+
+            case 'merge-groups': {
+                if (selectedGroups.length < 2) {
+                    showNotification('warning', 'حدد مجموعتين أو أكثر لدمجهما في مجموعة واحدة');
+                    return;
+                }
+                const optionsHtml = groupNames
+                    .filter(n => n !== 'بدون مشروع فرعي')
+                    .map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`)
+                    .join('');
+                openGroupBulkModal({
+                    title: 'دمج المجموعات المحددة في مجموعة واحدة',
+                    countLabel: `${selectedGroups.length} مجموعات`,
+                    bodyHtml: `
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">اختر اسم المجموعة المستهدفة:</label>
+                            <select id="groupModalMergeSelect" class="form-select">
+                                ${optionsHtml}
+                                <option value="__custom__">+ كتابة اسم مجموعة جديد...</option>
+                            </select>
+                        </div>
+                        <div id="groupModalMergeCustomWrap" class="${optionsHtml ? 'd-none' : ''}">
+                            <label class="form-label fw-bold">اسم المجموعة المدمجة</label>
+                            <input type="text" id="groupModalMergeCustom" class="form-control" placeholder="أدخل اسم المجموعة">
+                        </div>
+                    `,
+                    onConfirm: () => {
+                        const selVal = document.getElementById('groupModalMergeSelect')?.value || '__custom__';
+                        const targetName = selVal === '__custom__'
+                            ? (document.getElementById('groupModalMergeCustom')?.value?.trim() || '')
+                            : selVal;
+                        if (!targetName) {
+                            showNotification('warning', 'الرجاء تحديد أو إدخال اسم المجموعة المستهدفة');
+                            return false;
+                        }
+                        ensureSubprojectInOrder(targetName);
+                        selectedGroups.forEach(groupRow => {
+                            groupRow.querySelectorAll('tr[data-item-id] .subproject-input').forEach(inp => {
+                                inp.value = targetName;
+                            });
+                        });
+                        renderGroupedView();
+                        showNotification('success', `✅ تم دمج ${selectedGroups.length} مجموعات داخل "${targetName}"`);
+                        return true;
+                    }
+                });
+                document.getElementById('groupModalMergeSelect')?.addEventListener('change', function () {
+                    document.getElementById('groupModalMergeCustomWrap')?.classList.toggle('d-none', this.value !== '__custom__');
+                });
+                break;
+            }
+
+            case 'set-group-qty-unit': {
+                openGroupBulkModal({
+                    title: 'تعيين الكمية والوحدة للمجموعات المحددة',
+                    countLabel: `${selectedGroups.length} مجموعة`,
+                    bodyHtml: `
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">الكمية الإجمالية للمجموعة</label>
+                                <input type="number" step="0.01" min="0" id="groupModalQtyInput" class="form-control" placeholder="اتركه فارغاً لعدم التغيير">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">الوحدة (Unit)</label>
+                                <input type="text" id="groupModalUnitInput" class="form-control" list="commonUnitsDatalist" placeholder="مثال: ton, m3, nos.">
+                            </div>
+                        </div>
+                    `,
+                    onConfirm: () => {
+                        const qtyStr = document.getElementById('groupModalQtyInput')?.value?.trim() ?? '';
+                        const unitStr = document.getElementById('groupModalUnitInput')?.value?.trim() ?? '';
+                        if (qtyStr === '' && unitStr === '') {
+                            showNotification('warning', 'أدخل الكمية أو الوحدة أولاً');
+                            return false;
+                        }
+                        selectedGroups.forEach(groupRow => {
+                            const name = groupRow.querySelector('.category-header')?.dataset.category || '';
+                            const key = subprojectKey(name);
+                            const edits = state.subprojectEdits.get(name) || {};
+                            if (qtyStr !== '') {
+                                const qInp = groupRow.querySelector(`.subproject-quantity-input-${key}`);
+                                const formatted = parseFloat(qtyStr).toFixed(2);
+                                if (qInp) qInp.value = formatted;
+                                edits.totalQty = formatted;
+                            }
+                            if (unitStr !== '') {
+                                const uInp = groupRow.querySelector(`.subproject-unit-input-${key}`);
+                                if (uInp) uInp.value = unitStr;
+                                edits.unit = unitStr;
+                            }
+                            state.subprojectEdits.set(name, edits);
+                        });
+                        clearAllSelections();
+                        showNotification('success', `✅ تم تحديث بيانات ${selectedGroups.length} مجموعة`);
+                        return true;
+                    }
+                });
+                break;
+            }
+
+            case 'set-group-weight': {
+                openGroupBulkModal({
+                    title: 'تعيين وزن موحد للمجموعات المحددة',
+                    countLabel: `${selectedGroups.length} مجموعة`,
+                    bodyHtml: `
+                        <label class="form-label fw-bold">الوزن النسبي (Weight) لكل مجموعة محددة <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0" id="groupModalWeightInput" class="form-control" placeholder="مثال: 10">
+                    `,
+                    onConfirm: () => {
+                        const wStr = document.getElementById('groupModalWeightInput')?.value?.trim() || '';
+                        if (wStr === '' || isNaN(wStr) || parseFloat(wStr) < 0) {
+                            showNotification('warning', 'الرجاء إدخال وزن صحيح');
+                            return false;
+                        }
+                        const val = parseFloat(wStr);
+                        selectedGroups.forEach(groupRow => {
+                            const name = groupRow.querySelector('.category-header')?.dataset.category || '';
+                            const key = subprojectKey(name);
+                            const wInp = groupRow.querySelector(`.subproject-weight-input-${key}`);
+                            if (wInp) wInp.value = val;
+                            const edits = state.subprojectEdits.get(name) || {};
+                            edits.weight = val;
+                            state.subprojectEdits.set(name, edits);
+                        });
+                        clearAllSelections();
+                        showNotification('success', `✅ تم تعيين الوزن (${val}) لـ ${selectedGroups.length} مجموعة`);
+                        return true;
+                    }
+                });
+                break;
+            }
+
+            case 'distribute-weights': {
+                const count = selectedGroups.length;
+                const equalShare = Math.floor((100 / count) * 100) / 100;
+                const remainder = +(100 - equalShare * (count - 1)).toFixed(2);
+                selectedGroups.forEach((groupRow, idx) => {
+                    const name = groupRow.querySelector('.category-header')?.dataset.category || '';
+                    const key = subprojectKey(name);
+                    const wVal = idx === count - 1 ? remainder : equalShare;
+                    const wInp = groupRow.querySelector(`.subproject-weight-input-${key}`);
+                    if (wInp) wInp.value = wVal;
+                    const edits = state.subprojectEdits.get(name) || {};
+                    edits.weight = wVal;
+                    state.subprojectEdits.set(name, edits);
+                });
+                clearAllSelections();
+                showNotification('success', `✅ تم توزيع 100% بالتساوي على ${count} مجموعات (${equalShare}% لكل مجموعة)`);
+                break;
+            }
+
+            case 'export-groups': {
+                const rowsToExport = [];
+                selectedGroups.forEach(groupRow => {
+                    groupRow.querySelectorAll('tr[data-item-id]').forEach(r => rowsToExport.push(r));
+                });
+                bulkExport(rowsToExport);
+                clearAllSelections();
+                break;
+            }
+
+            case 'delete-groups': {
+                let rowsToDelete = [];
+                selectedGroups.forEach(groupRow => {
+                    groupRow.querySelectorAll('tr[data-item-id]').forEach(r => rowsToDelete.push(r));
+                });
+                if (!confirm(`هل أنت متأكد من حذف ${selectedGroups.length} مجموعة بالكامل (${rowsToDelete.length} بند)؟`)) {
+                    return;
+                }
+                rowsToDelete.forEach(r => r.remove());
+                selectedGroups.forEach(g => g.remove());
+                syncFlatItemOrderAfterMutation();
+                updateItemOrders();
+                calculateAllDates();
+                updateEmptyState();
+                clearAllSelections();
+                showNotification('success', `✅ تم حذف ${selectedGroups.length} مجموعة (${rowsToDelete.length} بند)`);
+                break;
+            }
+        }
+    }
+
+    function bulkClearNotes(selectedRows) {
+        if (!confirm(`هل تريد مسح الملاحظات من ${selectedRows.length} بند؟`)) {
+            return;
+        }
+        selectedRows.forEach(row => {
+            const notesInput = row.querySelector('[name*="[notes]"]');
+            if (notesInput) notesInput.value = '';
+        });
+        showNotification('success', `✅ تم مسح الملاحظات من ${selectedRows.length} بند`);
+    }
+
+    function bulkSetDuration(selectedRows) {
+        const duration = prompt(`تعيين مدة موحدة لـ ${selectedRows.length} بند محدد:\n\nأدخل المدة بالأيام:`);
+        if (duration !== null && duration.trim() !== '' && !isNaN(duration) && parseInt(duration, 10) > 0) {
+            const parsed = parseInt(duration, 10);
+            selectedRows.forEach(row => {
+                const durationInput = row.querySelector('.duration-input');
+                if (durationInput) durationInput.value = parsed;
+            });
+            calculateAllDates();
+            showNotification('success', `✅ تم تعيين المدة ${parsed} يوم لـ ${selectedRows.length} بند`);
+        }
+    }
+
+    // ========================================
+    // jQuery Popup Modal: Edit / Create Work Item (Item Name)
+    // ========================================
+    let pendingEditItemRows = [];
+    let selectedModalWorkItemId = null;
+
+    function initEditWorkItemModal() {
+        const $ = window.jQuery;
+        const modalEl = document.getElementById('editWorkItemModal');
+        if (!modalEl) return;
+
+        const searchInput = document.getElementById('modalWorkItemSearch');
+        const categoryFilter = document.getElementById('modalWorkItemCategoryFilter');
+        const confirmSelectBtn = document.getElementById('confirmSelectWorkItemBtn');
+        const confirmCreateBtn = document.getElementById('confirmCreateWorkItemBtn');
+        const newCategorySelect = document.getElementById('newWorkItemCategory');
+        const newCategoryWrap = document.getElementById('newWorkItemNewCategoryWrap');
+
+        // Toggle footer action buttons based on active tab
+        document.getElementById('tab-btn-existing-item')?.addEventListener('shown.bs.tab', () => {
+            confirmSelectBtn?.classList.remove('d-none');
+            confirmCreateBtn?.classList.add('d-none');
+            searchInput?.focus();
+        });
+
+        document.getElementById('tab-btn-create-item')?.addEventListener('shown.bs.tab', () => {
+            confirmSelectBtn?.classList.add('d-none');
+            confirmCreateBtn?.classList.remove('d-none');
+            document.getElementById('newWorkItemName')?.focus();
+        });
+
+        newCategorySelect?.addEventListener('change', function () {
+            if (this.value === '__new__') {
+                newCategoryWrap?.classList.remove('d-none');
+                document.getElementById('newWorkItemNewCategoryName')?.focus();
+            } else {
+                newCategoryWrap?.classList.add('d-none');
+            }
+        });
+
+        // Live search + AJAX enrichment
+        let modalSearchTimer = null;
+        const triggerListFilter = () => {
+            clearTimeout(modalSearchTimer);
+            modalSearchTimer = setTimeout(async () => {
+                const q = searchInput?.value?.trim() || '';
+                if (q.length >= 2) {
+                    try {
+                        const res = await fetch(`/work-items/search-ajax?q=${encodeURIComponent(q)}`);
+                        const data = await res.json();
+                        (data.results || []).forEach(remote => {
+                            if (!state.workItems.some(w => String(w.id) === String(remote.id))) {
+                                state.workItems.push(remote);
+                            }
+                        });
+                    } catch (_e) {
+                        // Offline fallback uses state.workItems
+                    }
+                }
+                renderModalWorkItemsList();
+            }, 180);
+        };
+
+        searchInput?.addEventListener('input', triggerListFilter);
+        categoryFilter?.addEventListener('change', renderModalWorkItemsList);
+
+        // Apply chosen existing WorkItem
+        confirmSelectBtn?.addEventListener('click', function () {
+            if (!selectedModalWorkItemId) {
+                showNotification('warning', 'الرجاء اختيار بند من القائمة أولاً');
+                return;
+            }
+            const chosen = state.workItems.find(w => String(w.id) === String(selectedModalWorkItemId));
+            if (!chosen) {
+                showNotification('error', 'لم يتم العثور على البند المختار');
+                return;
+            }
+            applyWorkItemToRows(pendingEditItemRows, chosen);
+            hideEditWorkItemModal();
+        });
+
+        // Create new WorkItem in DB via jQuery AJAX and apply immediately
+        confirmCreateBtn?.addEventListener('click', function () {
+            const nameEl = document.getElementById('newWorkItemName');
+            const unitEl = document.getElementById('newWorkItemUnit');
+            const catEl = document.getElementById('newWorkItemCategory');
+            const newCatEl = document.getElementById('newWorkItemNewCategoryName');
+            const descEl = document.getElementById('newWorkItemDescription');
+            const errBox = document.getElementById('createWorkItemError');
+
+            const name = nameEl?.value?.trim() || '';
+            const unit = unitEl?.value?.trim() || '';
+            const categoryVal = catEl?.value || '';
+            const newCategoryName = categoryVal === '__new__' ? (newCatEl?.value?.trim() || '') : '';
+            const categoryId = categoryVal !== '__new__' ? categoryVal : '';
+            const description = descEl?.value?.trim() || '';
+
+            const showErr = msg => {
+                if (errBox) {
+                    errBox.textContent = msg;
+                    errBox.classList.remove('d-none');
+                } else {
+                    showNotification('warning', msg);
+                }
+            };
+
+            errBox?.classList.add('d-none');
+
+            if (!name) return showErr('الرجاء إدخال اسم البند الجديد');
+            if (!unit) return showErr('الرجاء إدخال وحدة القياس');
+            if (!categoryId && !newCategoryName) return showErr('الرجاء اختيار الفئة أو إدخال اسم فئة جديدة');
+
+            confirmCreateBtn.disabled = true;
+            const originalHtml = confirmCreateBtn.innerHTML;
+            confirmCreateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> جاري الحفظ...';
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const payload = {
+                name,
+                unit,
+                category_id: categoryId || null,
+                new_category_name: newCategoryName || null,
+                description
+            };
+
+            const onDone = data => {
+                if (data && data.success && data.item) {
+                    // Add to global WorkItems state so it appears everywhere immediately
+                    const existingIdx = state.workItems.findIndex(w => String(w.id) === String(data.item.id));
+                    if (existingIdx !== -1) {
+                        state.workItems[existingIdx] = data.item;
+                    } else {
+                        state.workItems.unshift(data.item);
+                    }
+
+                    // If a new category was created, add it to the category selects
+                    if (data.item.category_id && data.item.category) {
+                        [categoryFilter, catEl].forEach(sel => {
+                            if (!sel) return;
+                            const exists = Array.from(sel.options).some(opt => String(opt.value) === String(data.item.category_id));
+                            if (!exists) {
+                                const opt = new Option(data.item.category, data.item.category_id);
+                                const newOpt = sel.querySelector('option[value="__new__"]');
+                                if (newOpt) {
+                                    sel.insertBefore(opt, newOpt);
+                                } else {
+                                    sel.appendChild(opt);
+                                }
+                            }
+                        });
+                    }
+
+                    applyWorkItemToRows(pendingEditItemRows, data.item);
+                    showNotification('success', `✅ تم إضافة "${data.item.name}" في Work Items وتطبيقه على ${pendingEditItemRows.length} صف`);
+                    hideEditWorkItemModal();
+                } else {
+                    showErr(data?.message || 'تعذر حفظ البند الجديد');
+                }
+            };
+
+            if ($) {
+                $.ajax({
+                    url: '/work-items/store-ajax',
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                    data: payload
+                })
+                    .done(onDone)
+                    .fail(xhr => {
+                        const msg = xhr.responseJSON?.message || 'حدث خطأ أثناء حفظ البند الجديد';
+                        showErr(msg);
+                    })
+                    .always(() => {
+                        confirmCreateBtn.disabled = false;
+                        confirmCreateBtn.innerHTML = originalHtml;
+                    });
+            } else {
+                fetch('/work-items/store-ajax', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify(payload)
+                })
+                    .then(r => r.json())
+                    .then(onDone)
+                    .catch(() => showErr('حدث خطأ أثناء الاتصال بالسيرفر'))
+                    .finally(() => {
+                        confirmCreateBtn.disabled = false;
+                        confirmCreateBtn.innerHTML = originalHtml;
+                    });
+            }
+        });
+    }
+
+    function openEditWorkItemModal(targetRows) {
+        if (!targetRows || targetRows.length === 0) {
+            showNotification('warning', 'الرجاء تحديد صف واحد على الأقل');
+            return;
+        }
+
+        pendingEditItemRows = targetRows;
+
+        // Preselect if all target rows share the same work_item_id
+        const uniqueIds = new Set(targetRows.map(r => String(r.dataset.workItemId || '')));
+        selectedModalWorkItemId = uniqueIds.size === 1 ? Array.from(uniqueIds)[0] : null;
+
+        const targetBadge = document.getElementById('editWorkItemTargetBadge');
+        if (targetBadge) {
+            targetBadge.textContent = `${targetRows.length} صف محدد`;
+        }
+
+        // Reset filters & create form
+        const searchInput = document.getElementById('modalWorkItemSearch');
+        const catFilter = document.getElementById('modalWorkItemCategoryFilter');
+        if (searchInput) searchInput.value = '';
+        if (catFilter) catFilter.value = '';
+
+        const nameEl = document.getElementById('newWorkItemName');
+        const unitEl = document.getElementById('newWorkItemUnit');
+        const catEl = document.getElementById('newWorkItemCategory');
+        const newCatWrap = document.getElementById('newWorkItemNewCategoryWrap');
+        const newCatName = document.getElementById('newWorkItemNewCategoryName');
+        const descEl = document.getElementById('newWorkItemDescription');
+        const errBox = document.getElementById('createWorkItemError');
+
+        if (nameEl) nameEl.value = '';
+        if (unitEl) unitEl.value = '';
+        if (catEl) catEl.value = '';
+        if (newCatName) newCatName.value = '';
+        if (descEl) descEl.value = '';
+        newCatWrap?.classList.add('d-none');
+        errBox?.classList.add('d-none');
+
+        // Activate first tab
+        const existingTabBtn = document.getElementById('tab-btn-existing-item');
+        if (existingTabBtn && typeof bootstrap !== 'undefined') {
+            bootstrap.Tab.getOrCreateInstance(existingTabBtn).show();
+        }
+        document.getElementById('confirmSelectWorkItemBtn')?.classList.remove('d-none');
+        document.getElementById('confirmCreateWorkItemBtn')?.classList.add('d-none');
+
+        renderModalWorkItemsList();
+
+        // Open popup with jQuery (with Bootstrap 5 fallback)
+        const modalEl = document.getElementById('editWorkItemModal');
+        if (window.jQuery && typeof window.jQuery(modalEl).modal === 'function') {
+            window.jQuery(modalEl).modal('show');
+        } else if (modalEl && typeof bootstrap !== 'undefined') {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    }
+
+    function hideEditWorkItemModal() {
+        const modalEl = document.getElementById('editWorkItemModal');
+        if (window.jQuery && typeof window.jQuery(modalEl).modal === 'function') {
+            window.jQuery(modalEl).modal('hide');
+        } else if (modalEl && typeof bootstrap !== 'undefined') {
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+        }
+    }
+
+    function renderModalWorkItemsList() {
+        const listEl = document.getElementById('modalWorkItemsList');
+        const countLabel = document.getElementById('modalWorkItemsCountLabel');
+        if (!listEl) return;
+
+        const q = (document.getElementById('modalWorkItemSearch')?.value || '').toLowerCase().trim();
+        const catId = document.getElementById('modalWorkItemCategoryFilter')?.value || '';
+
+        const filtered = (state.workItems || []).filter(item => {
+            if (catId && String(item.category_id || '') !== String(catId)) {
+                return false;
+            }
+            if (!q) return true;
+            const hay = `${item.name || ''} ${item.unit || ''} ${item.category || ''} ${item.description || ''}`.toLowerCase();
+            return hay.includes(q);
+        });
+
+        if (countLabel) {
+            countLabel.textContent = `${filtered.length} بند متاح`;
+        }
+
+        if (filtered.length === 0) {
+            listEl.innerHTML = `
+                <div class="p-4 text-center text-muted">
+                    <i class="fas fa-box-open fa-2x mb-2"></i>
+                    <div>لا توجد بنود مطابقة — يمكنك إضافته من تبويب <strong>"إضافة بند جديد في Work Items"</strong> بالأعلى.</div>
+                </div>
+            `;
+            return;
+        }
+
+        listEl.innerHTML = '';
+        const frag = document.createDocumentFragment();
+
+        filtered.forEach(item => {
+            const div = document.createElement('div');
+            const isSelected = String(item.id) === String(selectedModalWorkItemId);
+            div.className = `kon-workitem-option${isSelected ? ' selected' : ''}`;
+            div.dataset.id = item.id;
+            div.innerHTML = `
+                <div class="min-w-0">
+                    <div class="kon-wi-title text-truncate">${escapeHtml(item.name)}</div>
+                    <div class="kon-wi-meta d-flex flex-wrap gap-2 mt-1">
+                        ${item.category ? `<span><i class="fas fa-folder me-1 text-primary"></i>${escapeHtml(item.category)}</span>` : ''}
+                        ${item.description ? `<span class="fst-italic">• ${escapeHtml(item.description)}</span>` : ''}
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                    <span class="kon-wi-unit">${escapeHtml(item.unit || '-')}</span>
+                    ${isSelected ? '<i class="fas fa-check-circle text-success fs-5"></i>' : ''}
+                </div>
+            `;
+
+            div.addEventListener('click', () => {
+                selectedModalWorkItemId = item.id;
+                renderModalWorkItemsList();
+            });
+
+            div.addEventListener('dblclick', () => {
+                selectedModalWorkItemId = item.id;
+                applyWorkItemToRows(pendingEditItemRows, item);
+                hideEditWorkItemModal();
+            });
+
+            frag.appendChild(div);
+        });
+
+        listEl.appendChild(frag);
+    }
+
+    function applyWorkItemToRows(rows, workItem) {
+        if (!rows || rows.length === 0 || !workItem) return;
+
+        rows.forEach(row => {
+            row.dataset.workItemId = String(workItem.id);
+
+            const workItemIdInput = row.querySelector('input[name*="[work_item_id]"]');
+            if (workItemIdInput) {
+                workItemIdInput.value = workItem.id;
+            }
+
+            const nameCell = row.querySelector('td:nth-child(4)');
+            if (nameCell) {
+                let displayWrap = nameCell.querySelector('.work-item-display');
+                if (!displayWrap) {
+                    // Upgrade legacy DOM structure cleanly while keeping hidden inputs intact
+                    const hiddenInputs = Array.from(nameCell.querySelectorAll('input[type="hidden"]'));
+                    nameCell.innerHTML = '';
+                    hiddenInputs.forEach(inp => nameCell.appendChild(inp));
+                    displayWrap = document.createElement('div');
+                    displayWrap.className = 'work-item-display';
+                    nameCell.appendChild(displayWrap);
+                }
+
+                displayWrap.innerHTML = `
+                    <strong class="item-name-text">${escapeHtml(workItem.name)}</strong>
+                    ${workItem.category ? `<br><small class="text-muted item-category-text"><i class="fas fa-folder me-1"></i>${escapeHtml(workItem.category)}</small>` : ''}
+                    ${workItem.unit ? `<br><small class="text-muted item-unit-text"><i class="fas fa-ruler me-1"></i>${escapeHtml(workItem.unit)}</small>` : ''}
+                `;
+            }
+        });
+
+        updatePredecessors();
+        if (state.viewMode === 'grouped') {
+            updateSubprojectTotals();
+        }
+
+        showNotification('success', `✅ تم تحديث اسم البند إلى "${workItem.name}" في ${rows.length} صف`);
     }
 
     function getSelectedRows() {
@@ -1108,6 +2146,7 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         if (elements.selectAllItems) {
             elements.selectAllItems.checked = false;
         }
+        syncSelectionUI();
 
         showNotification('success', `تم حذف ${selectedRows.length} بند بنجاح`);
     }
@@ -1122,6 +2161,7 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         if (elements.selectAllItems) {
             elements.selectAllItems.checked = false;
         }
+        syncSelectionUI();
 
         showNotification('success', `تم نسخ ${selectedRows.length} بند بنجاح`);
     }
@@ -1195,6 +2235,7 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         }
 
         const trimmedName = subprojectName.trim();
+        ensureSubprojectInOrder(trimmedName);
 
         selectedRows.forEach(row => {
             const subprojectInput = row.querySelector('.subproject-input');
@@ -1209,20 +2250,15 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
 
         const successMessage = fromCategoryName
             ? `✅ تم نقل ${selectedRows.length} بند من "${fromCategoryName}" إلى "${trimmedName}"`
-            : `تم نقل ${selectedRows.length} بند إلى "${trimmedName}"`;
+            : `✅ تم نقل ${selectedRows.length} بند إلى "${trimmedName}"`;
         showNotification('success', successMessage);
 
-        // If moving from a subproject category, re-render grouped view and reset UI elements
-        if (fromCategoryName && typeof renderGroupedView === 'function') {
-            setTimeout(() => renderGroupedView(), 300);
-
-            // Reset select all checkbox and bulk action select if they exist
-            if (pendingMoveSelectAllCheckbox) {
-                pendingMoveSelectAllCheckbox.checked = false;
-            }
-            if (pendingMoveBulkActionSelect) {
-                pendingMoveBulkActionSelect.value = '';
-            }
+        if (state.viewMode === 'grouped' && typeof renderGroupedView === 'function') {
+            clearAllSelections();
+            setTimeout(() => renderGroupedView(), 120);
+        } else {
+            updatePredecessors();
+            syncSelectionUI();
         }
 
         // Clear pending rows and UI elements
@@ -1325,20 +2361,83 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         const { cycle, unresolvable, overflow } = scheduleItems(itemsData, projectStart, weeklyHolidays);
 
         if (cycle.length > 0) {
-            const names = describeCycle(itemsData, cycle, (_id, data) =>
-                data?.row?.querySelector('td:nth-child(4) strong')?.textContent || _id
+            // Walk the actual loop and build clickable chips so clicking ANY item jumps straight to its row!
+            const seen = new Set();
+            const loopIds = [];
+            let cur = cycle[0];
+            while (cur && !seen.has(cur)) {
+                seen.add(cur);
+                loopIds.push(cur);
+                cur = itemsData.get(cur)?.predecessorId;
+            }
+            if (cur) loopIds.push(cur);
+
+            const cycleTargets = loopIds.map(rowId => {
+                const row = itemsData.get(rowId)?.row;
+                const num = row?.dataset.displayNumber || '';
+                const name = row ? getRowItemName(row) : rowId;
+                return {
+                    label: num ? `#${num} ${name}` : name,
+                    target: row || rowId,
+                    focusSelector: '.predecessor-select'
+                };
+            });
+
+            showNotification(
+                'error',
+                'تبعية دائرية بين البنود! اضغط على أي بند أدناه للانتقال المباشر إليه وتصحيح البند السابق (Predecessor):',
+                {
+                    key: 'schedule-cycle',
+                    persistent: true,
+                    targets: cycleTargets,
+                    joinWithArrow: true,
+                    focusSelector: '.predecessor-select'
+                }
             );
-            showNotification('error', '⚠️ تبعية دائرية! البنود: ' + names.join(' → '));
-            console.error('🔴 Cannot calculate dates due to circular dependency', names);
             return;
+        } else {
+            dismissNotificationByKey('schedule-cycle');
         }
 
         if (unresolvable.length > 0) {
-            showNotification('warning', `⚠️ ${unresolvable.length} بند له سابق مفقود ولن تُحسب تواريخه`);
+            const unresolvableTargets = unresolvable.slice(0, 8).map(rowId => {
+                const row = itemsData.get(rowId)?.row;
+                const num = row?.dataset.displayNumber || '';
+                const name = row ? getRowItemName(row) : rowId;
+                return {
+                    label: num ? `#${num} ${name}` : name,
+                    target: row || rowId,
+                    focusSelector: '.predecessor-select'
+                };
+            });
+            showNotification(
+                'warning',
+                `يوجد ${unresolvable.length} بند يشير إلى بند سابق مفقود ولن تُحسب تواريخه — اضغط للانتقال إليه:`,
+                {
+                    key: 'schedule-unresolvable',
+                    persistent: true,
+                    targets: unresolvableTargets,
+                    focusSelector: '.predecessor-select'
+                }
+            );
+        } else {
+            dismissNotificationByKey('schedule-unresolvable');
         }
 
         if (overflow) {
-            showNotification('error', '⚠️ خطأ في حساب التواريخ - المدة كبيرة جداً');
+            const maxDurRow = Array.from(itemsData.values()).sort((a, b) => (b.duration || 0) - (a.duration || 0))[0]?.row;
+            showNotification(
+                'error',
+                'خطأ في حساب التواريخ — مدة أحد البنود كبيرة جداً أو كل أيام الأسبوع محددة كإجازات!',
+                {
+                    key: 'schedule-overflow',
+                    persistent: true,
+                    target: maxDurRow || '#working_days',
+                    focusSelector: '.duration-input'
+                }
+            );
+        } else {
+            dismissNotificationByKey('schedule-overflow');
         }
 
         itemsData.forEach(updateRowDates);
@@ -1378,33 +2477,127 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
     }
 
     // ========================================
-    // Sortable
+    // Sortable (Single + Multi-Row Drag & Drop)
     // ========================================
     let sortables = [];
+    let multiDragBundle = null;
 
-    /**
-     * Every instance stays bound to its element until it is destroyed, so creating a
-     * new one on each view switch left the old ones running and fired `onEnd` twice.
-     * The flat instance also has to go while grouped: its direct children are then
-     * the group rows, and dragging an item inside a group would drag the whole group.
-     */
     function destroySortables() {
         sortables.forEach(sortable => sortable.destroy());
         sortables = [];
+    }
+
+    /**
+     * Enables dragging multiple checked rows together as one bundle while keeping
+     * their relative order intact and keeping column # strictly fixed (1, 2, 3...).
+     */
+    function buildMultiRowSortableConfig(extraOptions = {}, onAfterReorder = null) {
+        return Object.assign({
+            handle: '.drag-handle',
+            animation: 150,
+            onStart: evt => {
+                const anchor = evt.item;
+                const isAnchorChecked = !!anchor?.querySelector('.item-checkbox')?.checked;
+                if (!isAnchorChecked) {
+                    multiDragBundle = null;
+                    return;
+                }
+
+                const scopeContainer = evt.from || elements.container;
+                const checkedInScope = Array.from(scopeContainer.querySelectorAll('tr[data-item-id]'))
+                    .filter(r => r.querySelector('.item-checkbox')?.checked);
+
+                if (checkedInScope.length <= 1) {
+                    multiDragBundle = null;
+                    return;
+                }
+
+                const companions = checkedInScope.filter(r => r !== anchor);
+                multiDragBundle = {
+                    orderedRows: checkedInScope,
+                    companions,
+                    anchor
+                };
+
+                anchor.classList.add('multi-drag-anchor');
+                const nameDisplay = anchor.querySelector('.work-item-display') || anchor.querySelector('td:nth-child(4)');
+                if (nameDisplay && !nameDisplay.querySelector('.multi-drag-pill')) {
+                    const pill = document.createElement('span');
+                    pill.className = 'multi-drag-pill';
+                    pill.innerHTML = `<i class="fas fa-layer-group"></i> تحريك ${checkedInScope.length} صفوف`;
+                    nameDisplay.appendChild(pill);
+                }
+
+                requestAnimationFrame(() => {
+                    companions.forEach(r => {
+                        r.classList.add('multi-drag-companion');
+                        r.style.display = 'none';
+                    });
+                });
+            },
+            onEnd: evt => {
+                let movedCount = 1;
+
+                if (multiDragBundle && multiDragBundle.anchor === evt.item) {
+                    const { orderedRows, companions, anchor } = multiDragBundle;
+                    movedCount = orderedRows.length;
+
+                    anchor.classList.remove('multi-drag-anchor');
+                    anchor.querySelector('.multi-drag-pill')?.remove();
+
+                    companions.forEach(r => {
+                        r.classList.remove('multi-drag-companion');
+                        r.style.display = '';
+                    });
+
+                    // Place all selected rows in their exact relative order at the drop position
+                    const marker = document.createComment('multi-row-drop-anchor');
+                    anchor.parentNode?.insertBefore(marker, anchor);
+                    orderedRows.forEach(r => {
+                        marker.parentNode?.insertBefore(r, marker);
+                    });
+                    marker.remove();
+
+                    // If dropped into a subproject group tbody, update subproject_name on all moved rows
+                    const targetTbody = anchor.closest('.sortable-category-items');
+                    if (targetTbody) {
+                        const targetCat = targetTbody.dataset.category || '';
+                        orderedRows.forEach(r => {
+                            const spInput = r.querySelector('.subproject-input');
+                            if (spInput) {
+                                spInput.value = targetCat === 'بدون مشروع فرعي' ? '' : targetCat;
+                            }
+                        });
+                    }
+
+                    multiDragBundle = null;
+                } else {
+                    syncSubprojectNameAfterItemMove(evt);
+                }
+
+                if (typeof onAfterReorder === 'function') {
+                    onAfterReorder(evt, movedCount);
+                }
+
+                syncSelectionUI();
+                if (movedCount > 1) {
+                    showNotification('info', `✅ تم تحريك ${movedCount} صفوف معاً مع الحفاظ على ثبات الترقيم #`);
+                }
+            }
+        }, extraOptions);
     }
 
     function initSortable() {
         if (typeof Sortable === 'undefined' || !elements.container) return;
 
         destroySortables();
-        sortables.push(Sortable.create(elements.container, {
-            handle: '.drag-handle',
-            animation: 150,
-            onEnd: () => {
+        sortables.push(Sortable.create(
+            elements.container,
+            buildMultiRowSortableConfig({}, () => {
                 updateItemOrders();
                 calculateAllDates();
-            }
-        }));
+            })
+        ));
     }
 
     // ========================================
@@ -1765,10 +2958,12 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         if (state.viewMode === 'flat') return;
 
         state.viewMode = 'flat';
+        syncBulkToolbarForViewMode();
 
         // Update button states
         document.getElementById('flat-view-btn')?.classList.add('active');
         document.getElementById('grouped-view-btn')?.classList.remove('active');
+        document.getElementById('toggle-all-groups-btn')?.classList.add('d-none');
 
         // Render flat view
         renderFlatView();
@@ -1784,15 +2979,42 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
 
         captureFlatItemOrder();
         state.viewMode = 'grouped';
+        syncBulkToolbarForViewMode();
 
         // Update button states
         document.getElementById('grouped-view-btn')?.classList.add('active');
         document.getElementById('flat-view-btn')?.classList.remove('active');
+        const toggleAllBtn = document.getElementById('toggle-all-groups-btn');
+        if (toggleAllBtn) {
+            toggleAllBtn.classList.remove('d-none');
+            toggleAllBtn.dataset.expanded = '0';
+            toggleAllBtn.innerHTML = '<i class="fas fa-angles-down me-1"></i> <span>توسيع الكل</span>';
+        }
 
         // Render grouped view
         renderGroupedView();
 
-        showNotification('success', 'العرض حسب الفئات مفعّل ✅');
+        showNotification('success', 'العرض المجمع مفعّل ✅');
+    }
+
+    function toggleAllCategoryGroups() {
+        const btn = document.getElementById('toggle-all-groups-btn');
+        if (!btn) return;
+        const expand = btn.dataset.expanded !== '1';
+        btn.dataset.expanded = expand ? '1' : '0';
+        btn.innerHTML = expand
+            ? '<i class="fas fa-angles-up me-1"></i> <span>طي الكل</span>'
+            : '<i class="fas fa-angles-down me-1"></i> <span>توسيع الكل</span>';
+
+        document.querySelectorAll('.category-group').forEach(group => {
+            const header = group.querySelector('.category-header');
+            const body = group.querySelector('.category-body');
+            const icon = group.querySelector('.category-toggle i');
+            if (!header || !body) return;
+            body.classList.toggle('collapsed', !expand);
+            header.classList.toggle('collapsed', !expand);
+            if (icon) icon.className = expand ? 'fas fa-chevron-down' : 'fas fa-chevron-right';
+        });
     }
 
     // ========================================
@@ -1800,6 +3022,16 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
     // ========================================
     function renderGroupedView() {
         if (!elements.container) return;
+
+        // Preserve predecessor selections & checked states BEFORE clearing container!
+        const savedPredecessors = new Map();
+        const savedCheckedIds = new Set();
+        elements.container.querySelectorAll('tr[data-item-id]').forEach(row => {
+            const id = row.dataset.itemId;
+            const predVal = row.querySelector('.predecessor-select')?.value || '';
+            if (id && predVal) savedPredecessors.set(id, predVal);
+            if (id && row.querySelector('.item-checkbox')?.checked) savedCheckedIds.add(id);
+        });
 
         // Keep the pre-group item_order; grouping is display-only.
         const rows = sortRowsByItemOrder(elements.container.querySelectorAll('tr[data-item-id]'));
@@ -1824,6 +3056,17 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             elements.container.appendChild(categoryGroup);
         });
 
+        // Restore checked states and rebuild fixed # numbers + accurate predecessor labels AFTER all groups exist in DOM
+        elements.container.querySelectorAll('tr[data-item-id]').forEach(row => {
+            const cb = row.querySelector('.item-checkbox');
+            if (cb && savedCheckedIds.has(row.dataset.itemId)) {
+                cb.checked = true;
+            }
+        });
+
+        refreshFixedRowNumbers();
+        updatePredecessors(savedPredecessors);
+        syncSelectionUI();
         initSortableForGroups();
     }
 
@@ -1996,10 +3239,14 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         }
 
         groupDiv.innerHTML = `
-            <td colspan="14" class="p-0">
+            <td colspan="16" class="p-0">
                 <div class="category-group">
                     <div class="category-header" data-category="${escapeAttr(categoryName)}">
-                        <div class="d-flex align-items-center gap-3 flex-grow-1">
+                        <div class="d-flex align-items-center gap-3 flex-grow-1 flex-wrap">
+                            <input type="checkbox"
+                                   class="form-check-input group-header-checkbox m-0"
+                                   data-category="${escapeAttr(categoryName)}"
+                                   title="تحديد كل بنود هذه المجموعة لتنفيذ عمليات جماعية">
                             <span class="category-drag-handle text-white-50" style="cursor: grab;" title="سحب لإعادة ترتيب المشروع الفرعي">
                                 <i class="fas fa-grip-vertical"></i>
                             </span>
@@ -2021,12 +3268,12 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
                                            step="0.01" 
                                            min="0" 
                                            class="form-control form-control-sm d-inline-block subproject-quantity-input-${categoryId}" 
-                                           style="width: 100px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; font-weight: bold;"
+                                           style="width: 105px;"
                                            value="${subprojectTotals.totalQty.toFixed(2)}"
                                            data-category-id="${categoryId}">
                                     <input type="text" 
                                            class="form-control form-control-sm d-inline-block subproject-unit-input-${categoryId}" 
-                                           style="width: 80px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; font-weight: bold; margin-left: 5px;"
+                                           style="width: 105px; margin-inline-start: 5px;"
                                            placeholder="الوحدة"
                                            value="${escapeAttr(subprojectTotals.unit)}"
                                            data-category-id="${categoryId}">
@@ -2053,7 +3300,7 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
                                            step="0.01" 
                                            min="0" 
                                            class="form-control form-control-sm d-inline-block subproject-weight-input-${categoryId}" 
-                                           style="width: 80px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; font-weight: bold;"
+                                           style="width: 85px;"
                                            value="${subprojectTotals.weight}"
                                            data-category-id="${categoryId}">
                                 </div>
@@ -2073,7 +3320,7 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
                     <div class="category-body">
                         <!-- Bulk Actions Toolbar for Subproject -->
                         <div class="p-2 bg-light border-bottom d-flex align-items-center gap-2 flex-wrap">
-                            <div class="form-check">
+                            <div class="form-check mb-0">
                                 <input class="form-check-input subproject-select-all" 
                                        type="checkbox" 
                                        id="selectAll_${categoryId}"
@@ -2085,30 +3332,32 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
                             
                             <div class="vr"></div>
                             
-                            <select class="form-select form-select-sm subproject-bulk-action" style="width: auto; min-width: 180px;" data-category="${escapeAttr(categoryName)}">
-                                <option value="">-- عمليات جماعية --</option>
-                                <option value="delete">🗑️ حذف الكل</option>
-                                <option value="duplicate">📋 نسخ الكل</option>
+                            <select class="form-select form-select-sm subproject-bulk-action" style="width: auto; min-width: 215px;" data-category="${escapeAttr(categoryName)}">
+                                <option value="">-- عمليات جماعية لبنود المجموعة --</option>
+                                <option value="edit-item-name">✏️ تعديل اسم البند (Item Name)</option>
                                 <option value="move">📁 نقل لمشروع فرعي آخر</option>
-                                <option value="export">📊 تصدير (CSV)</option>
-                                <option value="clear-notes">🧹 مسح الملاحظات</option>
+                                <option value="duplicate">📋 نسخ المحدد</option>
                                 <option value="set-duration">⏱️ تعيين مدة موحدة</option>
+                                <option value="clear-notes">🧹 مسح الملاحظات</option>
+                                <option value="export">📊 تصدير (CSV)</option>
+                                <option value="delete">🗑️ حذف المحدد</option>
                             </select>
                             
                             <button type="button" 
-                                    class="btn btn-sm btn-primary subproject-bulk-execute" 
+                                    class="btn btn-sm btn-primary subproject-bulk-execute fw-semibold" 
                                     data-category="${escapeAttr(categoryName)}"
                                     title="تنفيذ العملية">
-                                <i class="fas fa-play"></i>
+                                <i class="fas fa-play me-1"></i>
                                 تنفيذ
                             </button>
                             
                             <span class="ms-auto text-muted small">
-                                <span class="selected-count-${categoryId}">0</span> محدد
+                                <span class="selected-count-${categoryId} fw-bold text-primary">0</span> بند محدد
                             </span>
                         </div>
                         
                         <table class="table table-bordered table-hover align-middle category-items-table mb-0">
+                            ${SHARED_COLGROUP_HTML}
                             <tbody class="sortable-category-items" data-category="${escapeAttr(categoryName)}">
                             </tbody>
                         </table>
@@ -2120,27 +3369,20 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         // ✅ Don't sort - preserve DOM order (rows are already in correct order)
         // Add items to category body
         const tbody = groupDiv.querySelector('.sortable-category-items');
-        rows.forEach((row, index) => {
-            // Save predecessor, dependency type, and lag values before cloning
-            const predecessorSelect = row.querySelector('.predecessor-select');
+        rows.forEach((row) => {
             const dependencyTypeSelect = row.querySelector('select[name*="[dependency_type]"]');
             const lagInput = row.querySelector('.lag-input');
 
-            const predecessorValue = predecessorSelect?.value || '';
             const dependencyTypeValue = dependencyTypeSelect?.value || 'end_to_start';
             const lagValue = lagInput?.value || '0';
 
-            // Clone the row
             const clonedRow = row.cloneNode(true);
             tbody.appendChild(clonedRow);
 
-            // Restore values after cloning
             const newRow = tbody.lastChild;
-            const newPredecessorSelect = newRow.querySelector('.predecessor-select');
             const newDependencyTypeSelect = newRow.querySelector('select[name*="[dependency_type]"]');
             const newLagInput = newRow.querySelector('.lag-input');
 
-            if (newPredecessorSelect) setPredecessorValue(newPredecessorSelect, predecessorValue);
             if (newDependencyTypeSelect) newDependencyTypeSelect.value = dependencyTypeValue;
             if (newLagInput) newLagInput.value = lagValue;
 
@@ -2208,31 +3450,54 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
     // Subproject Bulk Actions
     // ========================================
     function attachSubprojectBulkActions(groupDiv, categoryName, categoryId) {
+        const headerCheckbox = groupDiv.querySelector('.group-header-checkbox');
         const selectAllCheckbox = groupDiv.querySelector('.subproject-select-all');
         const bulkActionSelect = groupDiv.querySelector('.subproject-bulk-action');
         const executeBtn = groupDiv.querySelector('.subproject-bulk-execute');
         const tbody = groupDiv.querySelector('.sortable-category-items');
 
-        // Select All functionality
+        const setGroupChecked = checked => {
+            tbody.querySelectorAll('.item-checkbox').forEach(cb => {
+                cb.checked = checked;
+            });
+            syncSelectionUI();
+        };
+
+        // Header checkbox on the group bar selects the GROUP itself (supports Shift+Click across groups!)
+        if (headerCheckbox) {
+            headerCheckbox.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const allGroupCbs = Array.from(document.querySelectorAll('.category-group-row'))
+                    .filter(g => g.style.display !== 'none')
+                    .map(g => g.querySelector('.group-header-checkbox'))
+                    .filter(Boolean);
+
+                if (e.shiftKey && lastClickedGroupCheckbox && lastClickedGroupCheckbox !== this) {
+                    const s = allGroupCbs.indexOf(lastClickedGroupCheckbox);
+                    const end = allGroupCbs.indexOf(this);
+                    if (s !== -1 && end !== -1) {
+                        const [from, to] = s < end ? [s, end] : [end, s];
+                        for (let i = from; i <= to; i++) {
+                            allGroupCbs[i].checked = this.checked;
+                        }
+                    }
+                }
+                lastClickedGroupCheckbox = this;
+                syncSelectionUI();
+            });
+        }
+
+        // Inner Select All checkbox selects the ITEMS inside this group
         if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener('change', function () {
-                const checkboxes = tbody.querySelectorAll('.item-checkbox');
-                checkboxes.forEach(cb => cb.checked = this.checked);
-                updateSubprojectSelectedCount(categoryId, tbody);
+                setGroupChecked(this.checked);
             });
         }
 
         // Update count when individual checkboxes change
         tbody.addEventListener('change', function (e) {
             if (e.target.classList.contains('item-checkbox')) {
-                updateSubprojectSelectedCount(categoryId, tbody);
-
-                // Update select all state
-                const allCheckboxes = tbody.querySelectorAll('.item-checkbox');
-                const checkedCheckboxes = tbody.querySelectorAll('.item-checkbox:checked');
-                if (selectAllCheckbox) {
-                    selectAllCheckbox.checked = allCheckboxes.length > 0 && allCheckboxes.length === checkedCheckboxes.length;
-                }
+                syncSelectionUI();
             }
         });
 
@@ -2270,6 +3535,11 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
 
     function executeSubprojectBulkAction(action, selectedRows, categoryName, tbody, selectAllCheckbox, bulkActionSelect) {
         switch (action) {
+            case 'edit-item-name':
+                openEditWorkItemModal(selectedRows);
+                if (bulkActionSelect) bulkActionSelect.value = '';
+                return;
+
             case 'delete':
                 if (!confirm(`هل أنت متأكد من حذف ${selectedRows.length} بند من "${categoryName}"؟`)) {
                     return;
@@ -2427,36 +3697,76 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
 
         destroySortables();
 
-        // Reorder entire subproject groups by their headers.
+        // Reorder entire subproject groups by their headers (supports Multi-Group Drag when multiple groups are checked!)
+        let multiGroupBundle = null;
         sortables.push(Sortable.create(elements.container, {
             handle: '.category-drag-handle',
             draggable: '.category-group-row',
             animation: 150,
-            onEnd: () => {
+            onStart: evt => {
+                const anchorGroup = evt.item;
+                const isChecked = !!anchorGroup?.querySelector('.group-header-checkbox')?.checked;
+                if (!isChecked) {
+                    multiGroupBundle = null;
+                    return;
+                }
+                const checkedGroups = getSelectedGroups();
+                if (checkedGroups.length <= 1) {
+                    multiGroupBundle = null;
+                    return;
+                }
+                const companions = checkedGroups.filter(g => g !== anchorGroup);
+                multiGroupBundle = { orderedGroups: checkedGroups, companions, anchorGroup };
+                requestAnimationFrame(() => {
+                    companions.forEach(g => {
+                        g.style.display = 'none';
+                    });
+                });
+            },
+            onEnd: evt => {
+                if (multiGroupBundle && multiGroupBundle.anchorGroup === evt.item) {
+                    const { orderedGroups, companions, anchorGroup } = multiGroupBundle;
+                    companions.forEach(g => {
+                        g.style.display = '';
+                    });
+                    const marker = document.createComment('multi-group-drop');
+                    anchorGroup.parentNode?.insertBefore(marker, anchorGroup);
+                    orderedGroups.forEach(g => marker.parentNode?.insertBefore(g, marker));
+                    marker.remove();
+                    multiGroupBundle = null;
+                }
                 syncSubprojectOrderFromDom();
+                refreshFixedRowNumbers();
+                updatePredecessors();
             }
         }));
 
-        // Items within their respective subproject groups (cannot cross groups)
+        // Items within/across subproject groups with full Multi-Row Drag support!
         document.querySelectorAll('.sortable-category-items').forEach(tbody => {
-            const categoryKey = tbody.dataset.category || 'default';
-            sortables.push(Sortable.create(tbody, {
-                group: 'subproject_' + categoryKey,
-                handle: '.drag-handle',
-                animation: 150,
-                onEnd: () => {
-                    syncFlatItemOrderFromGroupDrag(tbody);
-                    calculateAllDates();
-                    if (state.viewMode === 'grouped') {
-                        updateSubprojectTotals();
+            sortables.push(Sortable.create(
+                tbody,
+                buildMultiRowSortableConfig(
+                    { group: 'grouped-project-items' },
+                    () => {
+                        syncFlatItemOrderFromGroupDrag(tbody);
+                        refreshFixedRowNumbers();
+                        updatePredecessors();
+                        calculateAllDates();
+                        if (state.viewMode === 'grouped') {
+                            updateSubprojectTotals();
+                        }
                     }
-                }
-            }));
+                )
+            ));
         });
     }
 
     function renderFlatView() {
         if (!elements.container) return;
+
+        // Preserve predecessor selections & checked states BEFORE clearing container!
+        const savedPredecessors = new Map();
+        const savedCheckedIds = new Set();
 
         const allRows = [];
         const rowsById = new Map();
@@ -2485,6 +3795,13 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             }
         });
 
+        allRows.forEach(row => {
+            const id = row.dataset.itemId;
+            const predVal = row.querySelector('.predecessor-select')?.value || '';
+            if (id && predVal) savedPredecessors.set(id, predVal);
+            if (id && row.querySelector('.item-checkbox')?.checked) savedCheckedIds.add(id);
+        });
+
         const seen = new Set();
         const sortedRows = [];
 
@@ -2504,11 +3821,9 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         elements.container.innerHTML = '';
 
         sortedRows.forEach((row, index) => {
-            const predecessorSelect = row.querySelector('.predecessor-select');
             const dependencyTypeSelect = row.querySelector('select[name*="[dependency_type]"]');
             const lagInput = row.querySelector('.lag-input');
 
-            const predecessorValue = predecessorSelect?.value || '';
             const dependencyTypeValue = dependencyTypeSelect?.value || 'end_to_start';
             const lagValue = lagInput?.value || '0';
 
@@ -2516,13 +3831,13 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             elements.container.appendChild(clonedRow);
 
             const newRow = elements.container.lastChild;
-            const newPredecessorSelect = newRow.querySelector('.predecessor-select');
             const newDependencyTypeSelect = newRow.querySelector('select[name*="[dependency_type]"]');
             const newLagInput = newRow.querySelector('.lag-input');
+            const newCb = newRow.querySelector('.item-checkbox');
 
-            if (newPredecessorSelect) setPredecessorValue(newPredecessorSelect, predecessorValue);
             if (newDependencyTypeSelect) newDependencyTypeSelect.value = dependencyTypeValue;
             if (newLagInput) newLagInput.value = lagValue;
+            if (newCb) newCb.checked = savedCheckedIds.has(newRow.dataset.itemId);
 
             const orderInput = newRow.querySelector('input[name*="[item_order]"]');
             if (orderInput) {
@@ -2531,7 +3846,9 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         });
 
         captureFlatItemOrder(elements.container.querySelectorAll('tr[data-item-id]'));
-        updatePredecessors();
+        refreshFixedRowNumbers();
+        updatePredecessors(savedPredecessors);
+        syncSelectionUI();
     }
 
     // ========================================
@@ -2655,21 +3972,21 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
     }
 
     function validateDraftSubmit(e) {
-        const errors = [];
+        const missingTargets = [];
 
-        // Only check project name
         const projectName = document.getElementById('project-name-input')?.value?.trim();
         if (!projectName) {
-            errors.push('• اسم المشروع مطلوب');
+            missingTargets.push({ label: 'اسم المشروع مطلوب', target: '#project-name-input' });
         }
 
-        if (errors.length > 0) {
+        if (missingTargets.length > 0) {
             e.preventDefault();
-            showValidationErrors('لا يمكن حفظ المسودة', errors);
+            showValidationErrors('لا يمكن حفظ المسودة', missingTargets);
             return false;
         }
 
-        // Show confirmation for draft
+        dismissNotificationByKey('form-validation');
+
         const itemsCount = elements.container.querySelectorAll('tr[data-item-id]').length;
         const confirmMsg = `حفظ كمسودة:\n\n` +
             `📝 الاسم: ${projectName}\n` +
@@ -2682,53 +3999,53 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
         }
         return true;
     }
+
     function validateFullSubmit(e) {
-        const errors = [];
+        const missingTargets = [];
         const projectName = document.getElementById('project-name-input')?.value?.trim();
         if (!projectName) {
-            errors.push('• اسم المشروع مطلوب');
+            missingTargets.push({ label: 'اسم المشروع مطلوب', target: '#project-name-input' });
         }
 
         const clientId = document.getElementById('client-id-select')?.value;
         if (!clientId) {
-            errors.push('• العميل مطلوب');
+            missingTargets.push({ label: 'العميل مطلوب', target: '#client-id-select' });
         }
 
         const startDate = elements.startDate?.value;
         if (!startDate) {
-            errors.push('• تاريخ البداية مطلوب');
+            missingTargets.push({ label: 'تاريخ البداية مطلوب', target: '#start_date' });
         }
 
         const workingZone = document.getElementById('working_zone')?.value?.trim();
         if (!workingZone) {
-            errors.push('• منطقة العمل مطلوبة');
+            missingTargets.push({ label: 'منطقة العمل مطلوبة', target: '#working_zone' });
         }
 
         const projectTypeId = document.getElementById('project_type_id')?.value;
         if (!projectTypeId) {
-            errors.push('• نوع المشروع مطلوب');
+            missingTargets.push({ label: 'نوع المشروع مطلوب', target: '#project_type_id' });
         }
 
-        // Check items
         const itemsCount = elements.container.querySelectorAll('tr[data-item-id]').length;
         if (itemsCount === 0) {
-            errors.push('• يجب إضافة بند واحد على الأقل للمشروع');
+            missingTargets.push({ label: 'إضافة بند واحد على الأقل', target: '#work-item-search' });
         }
 
-        // Check employees
         const selectedEmployees = document.querySelectorAll('input[name="employees[]"]:checked').length;
         if (selectedEmployees === 0) {
-            errors.push('• يجب اختيار موظف واحد على الأقل');
+            const firstEmp = document.querySelector('input[name="employees[]"]');
+            missingTargets.push({ label: 'اختيار موظف واحد على الأقل', target: firstEmp ? firstEmp.closest('.card') : '#working_zone' });
         }
 
-        // If there are errors, prevent submission
-        if (errors.length > 0) {
+        if (missingTargets.length > 0) {
             e.preventDefault();
-            showValidationErrors('لا يمكن حفظ المشروع', errors);
+            showValidationErrors('لا يمكن حفظ المشروع — يرجى استكمال الحقول المطلوبة', missingTargets);
             return false;
         }
 
-        // Show confirmation with summary
+        dismissNotificationByKey('form-validation');
+
         const endDate = elements.endDate?.value || 'يحسب تلقائياً';
         const client = document.querySelector('#client-id-select option:checked')?.text || '';
 
@@ -2746,20 +4063,24 @@ import { debounce, escapeAttr, escapeHtml, formatDate, parseLocalDate, showNotif
             return false;
         }
 
-        // Show loading message
         showNotification('info', '⏳ جاري حفظ المشروع...');
 
         return true;
     }
 
-    function showValidationErrors(title, errors) {
-        const errorsList = errors.join('\n');
-        const message = `❌ ${title}\n\nالحقول المطلوبة التي لم يتم ملؤها:\n\n${errorsList}\n\nالرجاء إكمال البيانات المطلوبة.`;
-
-        alert(message);
-
-        // Also show as notification
-        showNotification('error', `${title} - يرجى إكمال الحقول المطلوبة`);
+    function showValidationErrors(title, missingTargets) {
+        showNotification(
+            'error',
+            `${title} (اضغط على أي حقل للانتقال المباشر إليه):`,
+            {
+                key: 'form-validation',
+                persistent: true,
+                targets: missingTargets
+            }
+        );
+        if (missingTargets.length > 0) {
+            navigateToAlertTarget(missingTargets[0].target);
+        }
     }
 
     // ========================================
