@@ -29,4 +29,4 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction \
 ENV PHP_CLI_SERVER_WORKERS=4
 EXPOSE 8080
 
-CMD ["sh", "-c", "(php artisan migrate --path=database/migrations/2026_11_22_000001_add_high_scale_performance_indexes.php --force || echo 'Index migration warning') && php artisan config:cache && php artisan view:cache && php -d variables_order=EGPCS artisan serve --host=0.0.0.0 --port=${PORT:-8080}"]
+CMD ["sh", "-c", "(php artisan migrate --path=database/migrations/2026_11_22_000001_add_high_scale_performance_indexes.php --force || echo 'Index migration warning') && php artisan config:cache && php artisan view:cache && php -d variables_order=EGPCS artisan serve --no-reload --host=0.0.0.0 --port=${PORT:-8080}"]
