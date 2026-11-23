@@ -15,18 +15,18 @@ return;
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/project-dashboard.css') }}">
 @endpush
-<div class="no-print">
-    <button type="button" class="btn btn-sm btn-light me-2" data-bs-toggle="modal" data-bs-target="#componentsModal">
-        <i class="fas fa-cog me-1"></i>{{ __('general.customize_view') }}
+<div class="d-flex flex-wrap align-items-center justify-content-end gap-2 mb-3 no-print">
+    <button type="button" class="btn btn-sm btn-outline-secondary bg-white" data-bs-toggle="modal" data-bs-target="#componentsModal">
+        <i class="fas fa-sliders-h me-1 text-primary"></i>{{ __('general.customize_view') }}
     </button>
-    <button type="button" class="btn btn-sm btn-light me-2 no-print" id="printDashboardBtn">
-        <i class="fas fa-print me-1"></i>{{ __('general.print') }}
+    <button type="button" class="btn btn-sm btn-outline-secondary bg-white no-print" id="printDashboardBtn">
+        <i class="fas fa-print me-1 text-primary"></i>{{ __('general.print') }}
     </button>
-    <button type="button" class="btn btn-sm btn-danger me-2 no-print" id="exportPdfBtn">
+    <button type="button" class="btn btn-sm btn-outline-primary bg-white no-print" id="exportPdfBtn">
         <i class="fas fa-file-pdf me-1"></i>Export PDF
     </button>
-    <button type="button" class="btn btn-sm btn-light me-2" data-bs-toggle="modal" data-bs-target="#calculationFormulasModal">
-        <i class="fas fa-calculator me-1"></i>{{ __('general.calculation_formulas') }}
+    <button type="button" class="btn btn-sm btn-outline-secondary bg-white" data-bs-toggle="modal" data-bs-target="#calculationFormulasModal">
+        <i class="fas fa-calculator me-1 text-primary"></i>{{ __('general.calculation_formulas') }}
     </button>
 </div>
 <div class="project-dashboard">
@@ -36,47 +36,18 @@ return;
             <div class="row align-items-center">
                 <div class="col-md-6">
                     <h1 class="h2 mb-2"><i class="fas fa-chart-line me-2"></i>{{ __('general.project_dashboard') }}</h1>
-                    <p class="mb-0 opacity-75">{{ $project->name }}@if($project->client) - {{ $project->client->name }}@endif</p>
+                    <p class="mb-0 text-muted">{{ $project->name }}@if($project->client) - {{ $project->client->name }}@endif</p>
                 </div>
                 <div class="col-md-6 text-md-end">
                     <span class="status-badge bg-{{ $projectStatus['color'] }}">
                         <i class="fas fa-{{ $projectStatus['icon'] }} me-1"></i>
                         {{ $projectStatus['message'] }}
                     </span>
-                    <div class="mt-2 text-white-50">
+                    <div class="mt-2 text-muted">
                         <small><i class="fas fa-sync-alt me-1"></i>{{ __('general.last_updated') }}:
                             {{ now()->format('d/m/Y H:i') }}</small>
                     </div>
 
-                </div>
-            </div>
-        </div>
-
-        <div class="container-fluid pt-4 dashboard-component" data-component="actions">
-            <div class="actions-section">
-                <h4 class="gradient-text fw-bold mb-3">
-                    <i class="fas fa-cogs me-2"></i>{{ __('general.actions') }}
-                </h4>
-                <div class="d-flex flex-wrap">
-                    <a href="{{ route('projects.progress', $project->id) }}" class="btn btn-success action-btn text-white">
-                        <i class="fas fa-tasks me-1"></i>{{ __('general.progress_report') }}
-                    </a>
-
-                    <a href="{{ route('projects.gantt', $project->id) }}" class="btn btn-primary action-btn text-white">
-                        <i class="fas fa-chart-bar me-1"></i>{{ __('general.gantt_chart') }}
-                    </a>
-
-                    @can('projects-edit')
-                    <a href="{{ route('projects.edit', $project->id) }}" class="btn btn-warning action-btn">
-                        <i class="fas fa-edit me-1"></i>{{ __('general.edit_project') }}
-                    </a>
-                    @endcan
-
-                    @can('projects-delete')
-                    <button type="button" class="btn btn-danger action-btn" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">
-                        <i class="fas fa-trash me-1"></i>{{ __('general.delete_project') }}
-                    </button>
-                    @endcan
                 </div>
             </div>
         </div>
@@ -112,7 +83,7 @@ return;
                 <div class="col-xl-4 col-md-6">
                     <div class="stat-card">
                         <div class="d-flex align-items-center">
-                            <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                            <div class="stat-icon" style="background: rgba(71, 85, 105, 0.10); color: #334155;">
                                 <i class="fas fa-calendar-day"></i>
                             </div>
                             <div class="ms-3">
@@ -124,9 +95,9 @@ return;
                             <div class="progress" style="height: 6px;">
                                 @php
                                 $totalDays = $daysPassed + $daysRemaining;
-                                $passedPercentage = $totalDays > 0 ? ($daysPassed / $totalDays) * 100 : 0;
+                                $passedPercentage = $totalDays > 0 ? min(100, max(0, ($daysPassed / $totalDays) * 100)) : 0;
                                 @endphp
-                                <div class="progress-bar bg-warning" style="width: {{ $passedPercentage }}%"></div>
+                                <div class="progress-bar" style="width: {{ $passedPercentage }}%; background-color: #475569;"></div>
                             </div>
                         </div>
                     </div>
@@ -135,7 +106,7 @@ return;
                 <div class="col-xl-4 col-md-6">
                     <div class="stat-card">
                         <div class="d-flex align-items-center">
-                            <div class="stat-icon bg-info bg-opacity-10 text-info">
+                            <div class="stat-icon bg-primary bg-opacity-10 text-primary">
                                 <i class="fas fa-users"></i>
                             </div>
                             <div class="ms-3">
@@ -145,7 +116,7 @@ return;
                         </div>
                         <div class="mt-3">
                             <div class="progress" style="height: 6px;">
-                                <div class="progress-bar bg-info" style="width: 100%"></div>
+                                <div class="progress-bar bg-primary" style="width: 100%; opacity: 0.75;"></div>
                             </div>
                         </div>
                     </div>
@@ -161,22 +132,20 @@ return;
                         <i class="fas fa-print me-1"></i>{{ __('general.print') }}
                     </button>
                 </div>
-                <div class="stat-card" style="border: 1.5px solid rgba(var(--bs-primary-rgb), 0.2); background: #fff; margin-bottom: 0;">
-                    <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="mb-1 fw-bold"><i class="fas fa-chart-line me-2 text-primary"></i>{{ __('general.total_weighted_progress') }}</h5>
-                                <p class="mb-0 text-muted small">{{ __('general.total_weighted_progress_description') }}</p>
-                            </div>
-                            <div class="text-end d-flex align-items-center gap-3">
-                                <div id="totalWeightedProgressDisplay">
-                                    <div class="text-center">
-                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
-                                            <span class="visually-hidden">{{ __('general.loading') }}...</span>
-                                        </div>
-                                    </div>
-                                </div>
+                <div class="stat-card" style="margin-bottom: 0;">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h5 class="mb-1 fw-bold text-dark"><i class="fas fa-chart-line me-2 text-primary"></i>{{ __('general.total_weighted_progress') }}</h5>
+                            <p class="mb-0 text-muted small">{{ __('general.total_weighted_progress_description') }}</p>
+                        </div>
+                    </div>
+                    <div id="totalWeightedProgressDisplay" class="w-100">
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                <span class="visually-hidden">{{ __('general.loading') }}...</span>
                             </div>
                         </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -190,7 +159,7 @@ return;
                             <i class="fas fa-chart-bar me-2"></i>{{ __('general.project_progress_overview') }}
                         </h4>
                         <div class="d-flex gap-2">
-                            <button type="button" id="toggleChartGroupedView" class="btn btn-sm btn-info text-white">
+                            <button type="button" id="toggleChartGroupedView" class="btn btn-sm btn-primary">
                                 <i class="fas fa-layer-group me-1"></i><span id="toggleChartGroupedText"></span>
                             </button>
                             <button type="button" id="selectAllItems" class="btn btn-sm btn-outline-primary">
@@ -369,10 +338,10 @@ return;
                                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ $loop->index }}" aria-expanded="false">
                                     <div class="d-flex justify-content-between align-items-center w-100 me-3">
                                         <div>
-                                            <i class="fas fa-folder-open me-2"></i>
+                                            <i class="fas fa-folder-open me-2 text-primary"></i>
                                             <strong>{{ $subprojectName }}</strong>
                                             @if($subproject && $subproject->weight)
-                                            <span class="badge bg-info ms-2">{{ $subproject->weight }}%</span>
+                                            <span class="badge ms-2" style="background: rgba(33, 60, 122, 0.10); color: #213c7a; border: 1px solid rgba(33, 60, 122, 0.2);">{{ $subproject->weight }}%</span>
                                             @endif
                                         </div>
                                         <div class="text-end">
@@ -380,11 +349,7 @@ return;
                                                 {{ number_format($subprojectData['progress'], 1) }}% {{ __('general.completed') }}
                                             </div>
                                             <div class="progress" style="height: 6px; width: 150px;">
-                                                <div class="progress-bar 
-                                                                    @if($subprojectData['progress'] >= 80) bg-success
-                                                                    @elseif($subprojectData['progress'] >= 50) bg-primary
-                                                                    @elseif($subprojectData['progress'] >= 30) bg-warning
-                                                                    @else bg-danger @endif"
+                                                <div class="progress-bar @if($subprojectData['progress'] >= 80) bg-success @else bg-primary @endif"
                                                     style="width: {{ $subprojectData['progress'] }}%"></div>
                                             </div>
                                         </div>
@@ -398,14 +363,14 @@ return;
                                         <div class="card-header bg-light">
                                             <div class="d-flex justify-content-between align-items-center">
                                                 <div>
-                                                    <i class="fas fa-tag me-2"></i>
+                                                    <i class="fas fa-tag me-2 text-secondary"></i>
                                                     <strong>{{ $categoryName }}</strong>
                                                     <span class="badge bg-secondary ms-2">{{ $categoryData['count'] }} {{ __('general.items') }}</span>
                                                 </div>
                                                 <div class="text-end">
                                                     <small class="text-muted">{{ number_format($categoryData['progress'], 1) }}%</small>
                                                     <div class="progress" style="height: 4px; width: 100px; margin-top: 2px;">
-                                                        <div class="progress-bar bg-info" style="width: {{ $categoryData['progress'] }}%"></div>
+                                                        <div class="progress-bar bg-primary" style="width: {{ $categoryData['progress'] }}%"></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -440,18 +405,14 @@ return;
                                                             <span class="fw-bold text-primary ms-2">{{ number_format($completionPercentage, 1) }}%</span>
                                                         </div>
                                                         <div class="progress mb-2" style="height: 10px; border-radius: 5px;">
-                                                            <div class="progress-bar
-                                                                                        @if ($completionPercentage >= 80) bg-success
-                                                                                        @elseif($completionPercentage >= 50) bg-primary
-                                                                                        @elseif($completionPercentage >= 30) bg-warning
-                                                                                        @else bg-danger @endif"
+                                                            <div class="progress-bar @if ($completionPercentage >= 80) bg-success @else bg-primary @endif"
                                                                 role="progressbar" style="width: {{ $completionPercentage }}%">
                                                             </div>
                                                         </div>
                                                         <div class="d-flex justify-content-between text-muted small">
                                                             <span><i class="fas fa-check-circle text-success me-1"></i>{{ number_format($item->completed_quantity, 2) }}</span>
-                                                            <span><i class="fas fa-clock text-warning me-1"></i>{{ number_format($item->remaining_quantity, 2) }}</span>
-                                                            <span><i class="fas fa-list text-info me-1"></i>{{ number_format($item->total_quantity, 2) }}</span>
+                                                            <span><i class="fas fa-clock text-secondary me-1"></i>{{ number_format($item->remaining_quantity, 2) }}</span>
+                                                            <span><i class="fas fa-list text-primary me-1"></i>{{ number_format($item->total_quantity, 2) }}</span>
                                                         </div>
                                                         @if($item->start_date && $item->end_date)
                                                         <div class="mt-2 pt-2 border-top">
@@ -691,14 +652,10 @@ return;
                                     <small class="text-muted">
                                         <i class="fas fa-check-circle me-1 text-success"></i>{{ __('general.actual_progress') }}
                                     </small>
-                                    <small class="fw-bold text-success">{{ number_format($completionPercentage, 1) }}%</small>
+                                    <small class="fw-bold text-primary">{{ number_format($completionPercentage, 1) }}%</small>
                                 </div>
                                 <div class="progress" style="height: 10px; border-radius: 8px;">
-                                    <div class="progress-bar
-                                            @if ($completionPercentage >= 80) bg-success
-                                            @elseif($completionPercentage >= 50) bg-primary
-                                            @elseif($completionPercentage >= 30) bg-warning
-                                            @else bg-danger @endif"
+                                    <div class="progress-bar @if ($completionPercentage >= 80) bg-success @else bg-primary @endif"
                                         role="progressbar" style="width: {{ min($completionPercentage, 100) }}%">
                                     </div>
                                 </div>
@@ -706,14 +663,14 @@ return;
                             <div class="planned-progress-section">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <small class="text-muted">
-                                        <i class="fas fa-calendar-check me-1 text-info"></i>{{ __('general.planned_progress') }}
+                                        <i class="fas fa-calendar-check me-1 text-secondary"></i>{{ __('general.planned_progress') }}
                                     </small>
-                                    <small class="fw-bold text-info">{{ number_format($plannedProgressUntilToday, 1) }}%</small>
+                                    <small class="fw-bold text-secondary">{{ number_format($plannedProgressUntilToday, 1) }}%</small>
                                 </div>
                                 <div class="progress" style="height: 10px; border-radius: 8px;">
-                                    <div class="progress-bar bg-info" 
+                                    <div class="progress-bar" 
                                          role="progressbar" 
-                                         style="width: {{ min($plannedProgressUntilToday, 100) }}%">
+                                         style="width: {{ min($plannedProgressUntilToday, 100) }}%; background-color: #64748b;">
                                     </div>
                                 </div>
                                 @if($progressDifference != 0)
@@ -825,7 +782,7 @@ return;
                                  data-item="{{ strtolower($progress->projectItem->workItem->name ?? '') }}">
                                 <div class="flex-shrink-0">
                                     @if($progress->employee ?? null)
-                                    <img src="https://ui-avatars.com/api/?name={{ urlencode($progress->employee->name) }}&background=4f46e5&color=fff"
+                                    <img src="https://ui-avatars.com/api/?name={{ urlencode($progress->employee->name) }}&background=213c7a&color=fff"
                                         alt="{{ $progress->employee->name }}" class="employee-avatar">
                                     @else
                                     <img src="https://ui-avatars.com/api/?name=Unknown&background=6c757d&color=fff"
@@ -962,7 +919,7 @@ return;
                     <div class="row">
                         <div class="col-md-4 text-center mb-3">
                             <div class="client-avatar mx-auto mb-2">
-                                <img src="https://ui-avatars.com/api/?name={{ urlencode($project->client->name) }}&background=4f46e5&color=fff&size=80"
+                                <img src="https://ui-avatars.com/api/?name={{ urlencode($project->client->name) }}&background=213c7a&color=fff&size=80"
                                     alt="{{ $project->client->name }}" class="rounded-circle" width="80"
                                     height="80">
                             </div>
@@ -1039,19 +996,14 @@ return;
                                     <div class="employee-performance-list">
                         @forelse($project->employees as $employee)
                         @php
-                        $employeeProgress = $employee
-                        ->dailyProgress()
-                        ->whereHas('projectItem', function ($query) use ($project) {
-                        $query->where('project_id', $project->id);
-                        })
-                        ->sum('quantity');
+                        $employeeProgress = (float) ($employee->project_progress_sum ?? 0);
 
                         $performancePercentage =
                         $employeeProgress > 0 ? min(100, ($employeeProgress / 1000) * 100) : 0;
                         @endphp
                         <div class="employee-performance">
                             <div class="flex-shrink-0 me-3">
-                                <img src="https://ui-avatars.com/api/?name={{ urlencode($employee->name) }}&background=4f46e5&color=fff"
+                                <img src="https://ui-avatars.com/api/?name={{ urlencode($employee->name) }}&background=213c7a&color=fff"
                                     alt="{{ $employee->name }}" class="employee-avatar">
                             </div>
                             <div class="flex-grow-1">
@@ -1095,360 +1047,269 @@ return;
 </div>
 </div>
 
-@can('projects-delete')
-<div class="modal fade" id="deleteProjectModal" tabindex="-1" aria-labelledby="deleteProjectModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form action="{{ route('projects.destroy', $project->id) }}" method="POST" id="deleteProjectForm">
-                @csrf
-                @method('DELETE')
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title" id="deleteProjectModalLabel">
-                        <i class="fas fa-exclamation-triangle me-2"></i>{{ __('general.delete_project') }}
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="fw-semibold mb-3">{{ __('general.confirm_delete_project') }}</p>
-
-                    <div class="mb-3">
-                        <label class="form-label">
-                            {{ __('general.type_project_name_to_confirm') }}
-                            "<strong id="deleteConfirmProjectName">{{ $project->name }}</strong>"
-                        </label>
-                        <input type="text" class="form-control" id="deleteProjectNameInput" autocomplete="off" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">
-                            {{ __('general.type_random_number_to_confirm') }}
-                            "<strong id="deleteConfirmRandomNumber"></strong>"
-                        </label>
-                        <input type="text" class="form-control" id="deleteProjectRandomInput" inputmode="numeric" autocomplete="off" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('general.cancel') }}</button>
-                    <button type="submit" class="btn btn-danger" id="confirmDeleteProjectBtn" disabled>
-                        <i class="fas fa-trash me-1"></i>{{ __('general.confirm_delete_action') }}
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const modal = document.getElementById('deleteProjectModal');
-    if (!modal) return;
-
-    const projectName = @json($project->name);
-    const nameInput = document.getElementById('deleteProjectNameInput');
-    const randomInput = document.getElementById('deleteProjectRandomInput');
-    const randomDisplay = document.getElementById('deleteConfirmRandomNumber');
-    const confirmBtn = document.getElementById('confirmDeleteProjectBtn');
-    const form = document.getElementById('deleteProjectForm');
-    let expectedRandom = '';
-
-    function generateRandomNumber() {
-        return String(Math.floor(1000 + Math.random() * 9000));
-    }
-
-    function validateDeleteConfirmation() {
-        const nameMatches = nameInput.value.trim() === projectName;
-        const randomMatches = randomInput.value.trim() === expectedRandom;
-        confirmBtn.disabled = !(nameMatches && randomMatches);
-    }
-
-    modal.addEventListener('show.bs.modal', function() {
-        expectedRandom = generateRandomNumber();
-        randomDisplay.textContent = expectedRandom;
-        nameInput.value = '';
-        randomInput.value = '';
-        confirmBtn.disabled = true;
-    });
-
-    modal.addEventListener('shown.bs.modal', function() {
-        nameInput.focus();
-    });
-
-    nameInput.addEventListener('input', validateDeleteConfirmation);
-    randomInput.addEventListener('input', validateDeleteConfirmation);
-
-    form.addEventListener('submit', function(e) {
-        if (nameInput.value.trim() !== projectName || randomInput.value.trim() !== expectedRandom) {
-            e.preventDefault();
-            confirmBtn.disabled = true;
-        }
-    });
-});
-</script>
-@endcan
-
 <div class="modal fade" id="componentsModal" tabindex="-1" aria-labelledby="componentsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content shadow border-0" style="border-radius: 16px; overflow: hidden;">
-            <div class="modal-header border-bottom px-4 py-3 bg-light">
-                <div class="d-flex align-items-center gap-2">
-                    <div class="p-2 rounded-3 bg-primary bg-opacity-10 text-primary">
+            <div class="modal-header bg-primary text-white px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="kon-cust-header-icon">
                         <i class="fas fa-sliders-h fa-lg"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title fw-bold mb-0" id="componentsModalLabel">
+                        <h5 class="modal-title fw-bold mb-0 text-white" id="componentsModalLabel">
                             {{ __('general.customize_view') }}
                         </h5>
-                        <small class="text-muted">{{ __('general.customize_view_desc') }}</small>
+                        <small style="color: rgba(255,255,255,0.82) !important;">{{ __('general.customize_view_desc') }}</small>
                     </div>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="badge bg-light text-secondary border px-2 py-1">
-                        <i class="fas fa-grip-vertical me-1"></i> {{ __('general.drag_to_reorder') }}
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <span class="badge bg-light text-dark border px-3 py-2 fw-semibold">
+                        <i class="fas fa-grip-vertical me-1 text-primary"></i> {{ __('general.drag_to_reorder') }}
                     </span>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex flex-wrap gap-2">
                         <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllComponents">
                             <i class="fas fa-check-double me-1"></i>{{ __('general.select_all') }}
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllComponents">
                             <i class="fas fa-times me-1"></i>{{ __('general.deselect_all') }}
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger" id="resetComponentsOrder">
-                            <i class="fas fa-undo me-1"></i>{{ __('general.reset_order') }}
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="resetComponentsOrder">
+                            <i class="fas fa-undo me-1 text-primary"></i>{{ __('general.reset_order') }}
                         </button>
                     </div>
                 </div>
 
                 <div class="customize-sections-list customize-sections-grid" id="customizeSectionsList">
-                    <!-- Component Items with Drag Handle and Switch -->
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="statistics-cards">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="statistics-cards">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-primary bg-opacity-10 text-primary">
-                                <i class="fas fa-chart-line"></i>
+                            <div class="section-icon-badge">
+                                <i class="fas fa-chart-pie"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.statistics_cards') }}</span>
+                                <span class="section-title">{{ __('general.statistics_cards') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="statistics-cards" id="check-statistics" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="statistics-cards" id="check-statistics" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="total-weighted-progress">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="total-weighted-progress">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-info bg-opacity-10 text-info">
-                                <i class="fas fa-chart-line"></i>
+                            <div class="section-icon-badge badge-emerald">
+                                <i class="fas fa-gauge-high"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.total_weighted_progress') }}</span>
+                                <span class="section-title">{{ __('general.total_weighted_progress') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="total-weighted-progress" id="check-total-weighted-progress" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="total-weighted-progress" id="check-total-weighted-progress" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="bar-chart">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="bar-chart">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-success bg-opacity-10 text-success">
-                                <i class="fas fa-chart-bar"></i>
+                            <div class="section-icon-badge">
+                                <i class="fas fa-chart-column"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.progress_chart') }}</span>
+                                <span class="section-title">{{ __('general.progress_chart') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="bar-chart" id="check-bar-chart" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="bar-chart" id="check-bar-chart" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="subprojects-chart">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="subprojects-chart">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-warning bg-opacity-10 text-warning">
-                                <i class="fas fa-sitemap"></i>
+                            <div class="section-icon-badge">
+                                <i class="fas fa-diagram-project"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.subprojects_progress') }}</span>
+                                <span class="section-title">{{ __('general.subprojects_progress') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="subprojects-chart" id="check-subprojects-chart" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="subprojects-chart" id="check-subprojects-chart" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="categories-chart">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="categories-chart">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-danger bg-opacity-10 text-danger">
+                            <div class="section-icon-badge">
                                 <i class="fas fa-tags"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.categories_progress') }}</span>
+                                <span class="section-title">{{ __('general.categories_progress') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="categories-chart" id="check-categories-chart" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="categories-chart" id="check-categories-chart" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="subproject-items-chart">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="subproject-items-chart">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-primary bg-opacity-10 text-primary">
-                                <i class="fas fa-list"></i>
+                            <div class="section-icon-badge">
+                                <i class="fas fa-layer-group"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.items_by_subproject') }}</span>
+                                <span class="section-title">{{ __('general.items_by_subproject') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="subproject-items-chart" id="check-subproject-items-chart" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="subproject-items-chart" id="check-subproject-items-chart" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="category-items-chart">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="category-items-chart">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-secondary bg-opacity-10 text-secondary">
-                                <i class="fas fa-folder"></i>
+                            <div class="section-icon-badge badge-slate">
+                                <i class="fas fa-folder-tree"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.items_by_category') }}</span>
+                                <span class="section-title">{{ __('general.items_by_category') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="category-items-chart" id="check-category-items-chart" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="category-items-chart" id="check-category-items-chart" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="hierarchical-view">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="hierarchical-view">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-info bg-opacity-10 text-info">
+                            <div class="section-icon-badge">
                                 <i class="fas fa-sitemap"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.hierarchical_view') }}</span>
+                                <span class="section-title">{{ __('general.hierarchical_view') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="hierarchical-view" id="check-hierarchical" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="hierarchical-view" id="check-hierarchical" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="work-items-progress">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="work-items-progress">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-success bg-opacity-10 text-success">
+                            <div class="section-icon-badge badge-emerald">
                                 <i class="fas fa-list-check"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.work_items_progress') }}</span>
+                                <span class="section-title">{{ __('general.work_items_progress') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="work-items-progress" id="check-work-items" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="work-items-progress" id="check-work-items" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="recent-activity">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="recent-activity">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-primary bg-opacity-10 text-primary">
-                                <i class="fas fa-history"></i>
+                            <div class="section-icon-badge badge-emerald">
+                                <i class="fas fa-clock-rotate-left"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.daily_progress_record') }}</span>
+                                <span class="section-title">{{ __('general.daily_progress_record') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="recent-activity" id="check-activity" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="recent-activity" id="check-activity" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="timeline">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="timeline">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-warning bg-opacity-10 text-warning">
-                                <i class="fas fa-project-diagram"></i>
+                            <div class="section-icon-badge badge-slate">
+                                <i class="fas fa-calendar-alt"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.project_timeline') }}</span>
+                                <span class="section-title">{{ __('general.project_timeline') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="timeline" id="check-timeline" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="timeline" id="check-timeline" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="client-info">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="client-info">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-info bg-opacity-10 text-info">
+                            <div class="section-icon-badge badge-slate">
                                 <i class="fas fa-building"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.client_information') }}</span>
+                                <span class="section-title">{{ __('general.client_information') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="client-info" id="check-client" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="client-info" id="check-client" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <div class="list-group-item d-flex align-items-center justify-content-between p-3 customize-item" data-id="employees-info">
+                    <div class="list-group-item d-flex align-items-center justify-content-between customize-item" data-id="employees-info">
                         <div class="d-flex align-items-center gap-3">
                             <div class="drag-handle" title="{{ __('general.drag_to_reorder') }}">
-                                <i class="fas fa-grip-vertical fa-lg"></i>
+                                <i class="fas fa-grip-vertical"></i>
                             </div>
-                            <div class="section-icon-badge bg-primary bg-opacity-10 text-primary">
+                            <div class="section-icon-badge badge-slate">
                                 <i class="fas fa-users"></i>
                             </div>
                             <div>
-                                <span class="fw-bold text-dark section-title">{{ __('general.team_members') }}</span>
+                                <span class="section-title">{{ __('general.team_members') }}</span>
                             </div>
                         </div>
                         <div class="form-check form-switch m-0">
-                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="employees-info" id="check-employees" checked style="width: 2.3em; height: 1.25em; cursor: pointer;">
+                            <input class="form-check-input component-checkbox" type="checkbox" role="switch" value="employees-info" id="check-employees" checked style="width: 2.35em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
                 </div>
             </div>
-            <div class="modal-footer border-top bg-light px-4 py-3">
-                <button type="button" class="btn btn-secondary px-3" data-bs-dismiss="modal">{{ __('general.close') }}</button>
-                <button type="button" class="btn btn-primary px-4 shadow-sm" id="saveComponentsSettings">
-                    <i class="fas fa-save me-1"></i>{{ __('general.save') }}
+            <div class="modal-footer justify-content-between px-4 py-3">
+                <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">{{ __('general.close') }}</button>
+                <button type="button" class="btn btn-primary px-4 fw-semibold" id="saveComponentsSettings">
+                    <i class="fas fa-check me-1"></i>{{ __('general.save') }}
                 </button>
             </div>
         </div>
@@ -1606,18 +1467,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     {
                         label: '{{ __('general.progress') }}',
                         data: currentWeightedRatios,
-                        backgroundColor: 'rgba(255, 99, 71, 0.7)',
-                        borderColor: 'rgba(255, 99, 71, 1)',
+                        backgroundColor: 'rgba(33, 60, 122, 0.88)',
+                        borderColor: '#213c7a',
                         borderWidth: 1,
-                        borderRadius: 0
+                        borderRadius: 6
                     },
                     {
                         label: '{{ __('general.planned_progress') }}',
                         data: currentPlannedWeightedRatios,
-                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
+                        backgroundColor: 'rgba(148, 163, 184, 0.48)',
+                        borderColor: '#64748b',
                         borderWidth: 1,
-                        borderRadius: 0
+                        borderRadius: 6
                     }
                 ]
             },
@@ -1702,14 +1563,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentPlannedWeightedRatios = g.planned;
 
                 if (toggleText) toggleText.textContent = '{{ __('general.flat_view') }}';
-                if (toggleBtn)  { toggleBtn.classList.remove('btn-outline-info'); toggleBtn.classList.add('btn-info', 'text-white'); }
+                if (toggleBtn)  { toggleBtn.classList.remove('btn-outline-primary'); toggleBtn.classList.add('btn-primary'); }
             } else {
                 currentLabels                = [...workItems];
                 currentWeightedRatios        = [...weightedRatios];
                 currentPlannedWeightedRatios = [...plannedWeightedRatios];
 
                 if (toggleText) toggleText.textContent = '{{ __('general.grouped_view') }}';
-                if (toggleBtn)  { toggleBtn.classList.remove('btn-info', 'text-white'); toggleBtn.classList.add('btn-outline-info'); }
+                if (toggleBtn)  { toggleBtn.classList.remove('btn-primary'); toggleBtn.classList.add('btn-outline-primary'); }
             }
 
             rebuildCheckboxes();
@@ -1774,18 +1635,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     {
                         label: '{{ __('general.progress') }}',
                         data: subprojectsData.weighted_ratios || [],
-                        backgroundColor: 'rgba(255, 99, 71, 0.7)',
-                        borderColor: 'rgba(255, 99, 71, 1)',
+                        backgroundColor: 'rgba(33, 60, 122, 0.88)',
+                        borderColor: '#213c7a',
                         borderWidth: 1,
-                        borderRadius: 0
+                        borderRadius: 6
                     },
                     {
                         label: '{{ __('general.planned_progress') }}',
                         data: subprojectsData.planned_weighted_ratios || [],
-                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
+                        backgroundColor: 'rgba(148, 163, 184, 0.48)',
+                        borderColor: '#64748b',
                         borderWidth: 1,
-                        borderRadius: 0
+                        borderRadius: 6
                     }
                 ]
             },
@@ -1837,18 +1698,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     {
                         label: '{{ __('general.progress') }}',
                         data: categoriesData.weighted_ratios || [],
-                        backgroundColor: 'rgba(255, 99, 71, 0.7)',
-                        borderColor: 'rgba(255, 99, 71, 1)',
+                        backgroundColor: 'rgba(33, 60, 122, 0.88)',
+                        borderColor: '#213c7a',
                         borderWidth: 1,
-                        borderRadius: 0
+                        borderRadius: 6
                     },
                     {
                         label: '{{ __('general.planned_progress') }}',
                         data: categoriesData.planned_weighted_ratios || [],
-                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
+                        backgroundColor: 'rgba(148, 163, 184, 0.48)',
+                        borderColor: '#64748b',
                         borderWidth: 1,
-                        borderRadius: 0
+                        borderRadius: 6
                     }
                 ]
             },
@@ -1959,68 +1820,56 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     const progressDifference = totalCompletedQuantity - totalPlannedQuantity;
                     const differenceIcon = progressDifference > 0 ? 'fa-arrow-up' : progressDifference < 0 ? 'fa-arrow-down' : 'fa-equals';
-                    const differenceColor = progressDifference > 0 ? 'text-success' : progressDifference < 0 ? 'text-warning' : 'text-white';
+                    const differenceColor = progressDifference > 0 ? 'text-success' : progressDifference < 0 ? 'text-danger' : 'text-secondary';
+                    const actualClamped = Math.min(Math.max(totalProgressPercentage, 0), 100);
+                    const plannedClamped = Math.min(Math.max(totalPlannedProgressPercentage, 0), 100);
+                    const actualLabelClass = actualClamped >= 52 ? 'on-dark' : 'on-light';
+                    const plannedLabelClass = plannedClamped >= 52 ? 'on-dark' : 'on-light';
                     
                     const formatNumber = (num) => {
                         return num.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
                     };
                     
                     displayElement.innerHTML = `
-                        <div class="text-center">
+                        <div>
                             <div class="row g-3">
-                                <div class="col-12">
-                                    <div class="p-3 rounded-3" style="background: rgba(var(--bs-primary-rgb), 0.06); border: 1px solid rgba(var(--bs-primary-rgb), 0.15);">
+                                <div class="col-md-6">
+                                    <div class="p-3 rounded-3 h-100" style="background: #ffffff; border: 1px solid #e2e8f0; border-inline-start: 4px solid #16803c;">
                                         <div class="d-flex align-items-center justify-content-between mb-2">
                                             <div class="d-flex align-items-center gap-2">
                                                 <i class="fas fa-check-circle fa-lg text-success"></i>
                                                 <span class="text-muted fw-semibold">${actualProgressLabel}</span>
                                             </div>
-                                            <div class="d-flex align-items-center">
-                                                <span class="fw-bold text-dark" style="font-size: 2.5rem;">${Math.min(totalProgressPercentage, 100).toFixed(1)}%</span>
-                                            </div>
+                                            <span class="fw-bold" style="font-size: 2rem; color: #0f172a; line-height: 1.1;">${actualClamped.toFixed(1)}%</span>
                                         </div>
-                                        <div class="progress mb-2" style="height: 24px; background-color: rgba(0,0,0,0.07); border-radius: 12px;">
-                                            <div class="progress-bar bg-success d-flex align-items-center justify-content-end" 
-                                                 role="progressbar" 
-                                                 style="width: ${Math.min(totalProgressPercentage, 100)}%; border-radius: 12px; transition: width 0.6s ease;" 
-                                                 aria-valuenow="${totalProgressPercentage}" 
-                                                 aria-valuemin="0" 
-                                                 aria-valuemax="100">
-                                                <span class="text-white fw-bold px-2" style="font-size: 0.75rem;">${Math.min(totalProgressPercentage, 100).toFixed(1)}%</span>
-                                            </div>
+                                        <div class="kon-progress-track" role="progressbar" aria-valuenow="${actualClamped}" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="kon-progress-fill fill-actual" style="width: ${actualClamped}%;"></div>
+                                            <span class="kon-progress-label ${actualLabelClass}">${actualClamped.toFixed(1)}%</span>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <div class="col-12">
-                                    <div class="p-3 rounded-3" style="background: rgba(13,202,240,0.06); border: 1px solid rgba(13,202,240,0.2);">
+                                <div class="col-md-6">
+                                    <div class="p-3 rounded-3 h-100" style="background: #ffffff; border: 1px solid #e2e8f0; border-inline-start: 4px solid #213c7a;">
                                         <div class="d-flex align-items-center justify-content-between mb-2">
                                             <div class="d-flex align-items-center gap-2">
-                                                <i class="fas fa-calendar-check fa-lg text-info"></i>
+                                                <i class="fas fa-calendar-check fa-lg text-primary"></i>
                                                 <span class="text-muted fw-semibold">${plannedProgressLabel}</span>
                                             </div>
-                                            <div class="d-flex align-items-center">
-                                                <span class="fw-bold text-dark" style="font-size: 2.5rem;">${Math.min(totalPlannedProgressPercentage, 100).toFixed(1)}%</span>
-                                            </div>
+                                            <span class="fw-bold" style="font-size: 2rem; color: #0f172a; line-height: 1.1;">${plannedClamped.toFixed(1)}%</span>
                                         </div>
-                                        <div class="progress mb-2" style="height: 24px; background-color: rgba(0,0,0,0.07); border-radius: 12px;">
-                                            <div class="progress-bar bg-info d-flex align-items-center justify-content-end" 
-                                                 role="progressbar" 
-                                                 style="width: ${Math.min(totalPlannedProgressPercentage, 100)}%; border-radius: 12px; transition: width 0.6s ease;" 
-                                                 aria-valuenow="${totalPlannedProgressPercentage}" 
-                                                 aria-valuemin="0" 
-                                                 aria-valuemax="100">
-                                                <span class="text-white fw-bold px-2" style="font-size: 0.75rem;">${Math.min(totalPlannedProgressPercentage, 100).toFixed(1)}%</span>
-                                            </div>
+                                        <div class="kon-progress-track" role="progressbar" aria-valuenow="${plannedClamped}" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="kon-progress-fill fill-planned" style="width: ${plannedClamped}%;"></div>
+                                            <span class="kon-progress-label ${plannedLabelClass}">${plannedClamped.toFixed(1)}%</span>
                                         </div>
                                     </div>
                                 </div>
                                 
                                 <div class="col-12">
-                                    <div class="p-2 rounded-3 text-center" style="background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.08);">
+                                    <div class="py-2 px-3 rounded-3 text-center" style="background: #f8fafc; border: 1px solid #e2e8f0;">
                                         <div class="d-flex align-items-center justify-content-center gap-2">
                                             <i class="fas ${differenceIcon} ${differenceColor}"></i>
-                                            <span class="text-muted small">
+                                            <span class="fw-semibold small" style="color: #334155;">
                                                 ${formatNumber(Math.abs(progressDifference))} 
                                                 ${progressDifference > 0 ? aheadByLabel : progressDifference < 0 ? behindByLabel : onTrackLabel}
                                             </span>
@@ -2099,9 +1948,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     progressBar.style.width = progressValue + '%';
                                     
                                     progressBar.className = 'progress-bar ' + 
-                                        (progressValue >= 80 ? 'bg-success' :
-                                         progressValue >= 50 ? 'bg-primary' :
-                                         progressValue >= 30 ? 'bg-warning' : 'bg-danger');
+                                        (progressValue >= 80 ? 'bg-success' : 'bg-primary');
                                 }
                             }
                         });
@@ -2170,18 +2017,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         {
                             label: '{{ __('general.progress') }}',
                             data: filteredWeightedRatios,
-                            backgroundColor: 'rgba(255, 99, 71, 0.7)',
-                            borderColor: 'rgba(255, 99, 71, 1)',
+                            backgroundColor: 'rgba(33, 60, 122, 0.88)',
+                            borderColor: '#213c7a',
                             borderWidth: 1,
-                            borderRadius: 0
+                            borderRadius: 6
                         },
                         {
                             label: '{{ __('general.planned_progress') }}',
                             data: filteredPlannedWeightedRatios,
-                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                            borderColor: 'rgba(59, 130, 246, 1)',
+                            backgroundColor: 'rgba(148, 163, 184, 0.48)',
+                            borderColor: '#64748b',
                             borderWidth: 1,
-                            borderRadius: 0
+                            borderRadius: 6
                         }
                     ]
                 },
@@ -2269,18 +2116,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         {
                             label: '{{ __('general.progress') }}',
                             data: data.weighted_ratios || [],
-                            backgroundColor: 'rgba(255, 99, 71, 0.7)',
-                            borderColor: 'rgba(255, 99, 71, 1)',
+                            backgroundColor: 'rgba(33, 60, 122, 0.88)',
+                            borderColor: '#213c7a',
                             borderWidth: 1,
-                            borderRadius: 0
+                            borderRadius: 6
                         },
                         {
                             label: '{{ __('general.planned_progress') }}',
                             data: data.planned_weighted_ratios || [],
-                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                            borderColor: 'rgba(59, 130, 246, 1)',
+                            backgroundColor: 'rgba(148, 163, 184, 0.48)',
+                            borderColor: '#64748b',
                             borderWidth: 1,
-                            borderRadius: 0
+                            borderRadius: 6
                         }
                     ]
                 },
@@ -2412,12 +2259,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
-            // Set checkbox checked state
+            // Set checkbox checked state & visual dim state
             listContainer.querySelectorAll('.customize-item').forEach(item => {
                 const id = item.getAttribute('data-id');
                 const cb = item.querySelector('.component-checkbox');
                 if (cb) {
                     cb.checked = (visibility[id] !== false);
+                    item.classList.toggle('is-off', !cb.checked);
+                    if (!cb.hasAttribute('data-vis-bound')) {
+                        cb.setAttribute('data-vis-bound', '1');
+                        cb.addEventListener('change', () => item.classList.toggle('is-off', !cb.checked));
+                    }
                 }
             });
         }
@@ -2585,6 +2437,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 selectAllBtn.addEventListener('click', function() {
                     document.querySelectorAll('#customizeSectionsList .component-checkbox').forEach(cb => {
                         cb.checked = true;
+                        cb.closest('.customize-item')?.classList.remove('is-off');
                     });
                 });
             }
@@ -2595,6 +2448,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 deselectAllBtn.addEventListener('click', function() {
                     document.querySelectorAll('#customizeSectionsList .component-checkbox').forEach(cb => {
                         cb.checked = false;
+                        cb.closest('.customize-item')?.classList.add('is-off');
                     });
                 });
             }
@@ -2900,9 +2754,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 const statusColor = statusColors[group.status] || 'secondary';
                 
-                const progressColor = group.completion_percentage >= 80 ? 'success' :
-                                    group.completion_percentage >= 50 ? 'primary' :
-                                    group.completion_percentage >= 30 ? 'warning' : 'danger';
+                const progressColor = group.completion_percentage >= 80 ? 'success' : 'primary';
 
                 card.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -3374,16 +3226,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     {
                         label: '{{ __('general.progress') }}',
                         data: progressData,
-                        backgroundColor: 'rgba(255, 99, 71, 0.7)',
-                        borderColor: 'rgba(255, 99, 71, 1)',
-                        borderWidth: 1
+                        backgroundColor: 'rgba(33, 60, 122, 0.88)',
+                        borderColor: '#213c7a',
+                        borderWidth: 1,
+                        borderRadius: 6
                     },
                     {
                         label: '{{ __('general.planned_progress') }}',
                         data: plannedData,
-                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
-                        borderWidth: 1
+                        backgroundColor: 'rgba(148, 163, 184, 0.48)',
+                        borderColor: '#64748b',
+                        borderWidth: 1,
+                        borderRadius: 6
                     }
                 ]
             },
@@ -3982,7 +3836,7 @@ document.addEventListener('DOMContentLoaded', function() {
             subprojectEls.forEach(function(spEl) {
                 const spTitleEl = spEl.querySelector('strong');
                 const spName = spTitleEl ? spTitleEl.innerText.trim() : (spEl.dataset.subprojectName || '');
-                const spWeight = spEl.querySelector('.badge.bg-info')?.innerText?.trim() || '';
+                const spWeight = spEl.querySelector('.accordion-header .badge')?.innerText?.trim() || '';
                 const spProgress = spEl.querySelector('.small.text-muted')?.innerText?.trim() || '';
 
                 const spHead = document.createElement('div');
@@ -4259,8 +4113,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             data: {
                                 labels: labels,
                                 datasets: [
-                                    { label: '{{ __('general.progress') }}', data: actual, backgroundColor: 'rgba(255,99,71,0.7)', borderColor: 'rgba(255,99,71,1)', borderWidth: 1 },
-                                    { label: '{{ __('general.planned_progress') }}', data: planned, backgroundColor: 'rgba(59,130,246,0.7)', borderColor: 'rgba(59,130,246,1)', borderWidth: 1 }
+                                    { label: '{{ __('general.progress') }}', data: actual, backgroundColor: 'rgba(33,60,122,0.88)', borderColor: '#213c7a', borderWidth: 1, borderRadius: 6 },
+                                    { label: '{{ __('general.planned_progress') }}', data: planned, backgroundColor: 'rgba(148,163,184,0.48)', borderColor: '#64748b', borderWidth: 1, borderRadius: 6 }
                                 ]
                             },
                             options: { animation: false, responsive: false, plugins: { legend: { display: true, position: 'top' } }, scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } } }
@@ -4289,8 +4143,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             data: {
                                 labels: d.labels || [],
                                 datasets: [
-                                    { label: '{{ __('general.progress') }}', data: d.weighted_ratios || [], backgroundColor: 'rgba(255,99,71,0.7)', borderColor: 'rgba(255,99,71,1)', borderWidth: 1 },
-                                    { label: '{{ __('general.planned_progress') }}', data: d.planned_weighted_ratios || [], backgroundColor: 'rgba(59,130,246,0.7)', borderColor: 'rgba(59,130,246,1)', borderWidth: 1 }
+                                    { label: '{{ __('general.progress') }}', data: d.weighted_ratios || [], backgroundColor: 'rgba(33,60,122,0.88)', borderColor: '#213c7a', borderWidth: 1, borderRadius: 6 },
+                                    { label: '{{ __('general.planned_progress') }}', data: d.planned_weighted_ratios || [], backgroundColor: 'rgba(148,163,184,0.48)', borderColor: '#64748b', borderWidth: 1, borderRadius: 6 }
                                 ]
                             },
                             options: { animation: false, responsive: false, plugins: { legend: { display: true, position: 'top' } }, scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } } }
