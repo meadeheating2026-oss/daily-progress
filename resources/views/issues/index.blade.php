@@ -62,7 +62,7 @@
             <p class="text-muted mb-0">{{ __('general.manage_project_issues') }}</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ route('issues.kanban') }}" class="btn btn-outline-primary">
+            <a href="{{ route('issues.kanban', request()->only('project_id')) }}" class="btn btn-outline-primary">
                 <i class="fas fa-columns me-1"></i>{{ __('general.kanban_board') }}
             </a>
             @can('issues-create')
@@ -229,7 +229,7 @@
                         <tr class="issue-card" style="border-inline-start: 3px solid {{ $issue->priority == 'Urgent' ? 'var(--bad)' : ($issue->priority == 'High' ? 'var(--orange)' : ($issue->priority == 'Medium' ? 'var(--warn)' : 'var(--info)')) }}; border-left: 0;">
                             <td>{{ $issue->id }}</td>
                             <td>
-                                <a href="{{ route('issues.show', $issue) }}" class="text-decoration-none">
+                                <a href="{{ route('issues.show', array_merge(['issue' => $issue->id], request()->only('project_id'))) }}" class="text-decoration-none">
                                     {{ Str::limit($issue->title, 50) }}
                                 </a>
                                 @if($issue->isOverdue())
@@ -257,11 +257,11 @@
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <a href="{{ route('issues.show', $issue) }}" class="btn btn-info" title="{{ __('general.view') }}">
+                                    <a href="{{ route('issues.show', array_merge(['issue' => $issue->id], request()->only('project_id'))) }}" class="btn btn-info" title="{{ __('general.view') }}">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     @can('issues-edit')
-                                    <a href="{{ route('issues.edit', $issue) }}" class="btn btn-warning" title="{{ __('general.edit') }}">
+                                    <a href="{{ route('issues.edit', array_merge(['issue' => $issue->id], request()->only('project_id'))) }}" class="btn btn-warning" title="{{ __('general.edit') }}">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     @endcan

@@ -64,7 +64,7 @@
                         <tbody>
                             @foreach ($drafts as $draft)
                                 <tr>
-                                    <td>{{ $loop->iteration }}</td>
+                                    <td>{{ ($drafts->firstItem() ?? 1) + $loop->index }}</td>
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <i class="fas fa-file-alt text-warning me-2"></i>
@@ -85,8 +85,8 @@
                                         </span>
                                     </td>
                                     <td>
-                                        @if($draft->projectType)
-                                            {{ $draft->projectType->name }}
+                                        @if($draft->type)
+                                            {{ $draft->type->name }}
                                         @else
                                             <span class="text-muted">{{ __('general.not_set') }}</span>
                                         @endif
@@ -106,8 +106,8 @@
                                             if($draft->end_date) $filled++;
                                             if($draft->project_type_id) $filled++;
                                             if($draft->working_zone) $filled++;
-                                            if($draft->items->count() > 0) $filled++;
-                                            if($draft->employees->count() > 0) $filled++;
+                                            if(($draft->items_count ?? 0) > 0) $filled++;
+                                            if(($draft->employees_count ?? 0) > 0) $filled++;
 
                                             $completion = round(($filled / $total) * 100);
                                         @endphp
@@ -180,6 +180,11 @@
                         </tbody>
                     </table>
                 </div>
+                @if($drafts->hasPages())
+                    <div class="d-flex justify-content-center mt-3">
+                        {{ $drafts->links('pagination::bootstrap-5') }}
+                    </div>
+                @endif
             </div>
         </div>
     @endif
@@ -206,13 +211,17 @@
     @push('scripts')
     <script>
         $(document).ready(function() {
-            $('#draftsTable').DataTable({
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json'
-                },
-                order: [[5, 'desc']], // ترتيب حسب تاريخ الإنشاء
-                pageLength: 25
-            });
+            if ($.fn.DataTable) {
+                $('#draftsTable').DataTable({
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json'
+                    },
+                    order: [[5, 'desc']],
+                    paging: {{ $drafts->hasPages() ? 'false' : 'true' }},
+                    info: {{ $drafts->hasPages() ? 'false' : 'true' }},
+                    pageLength: 25
+                });
+            }
         });
     </script>
     @endpush

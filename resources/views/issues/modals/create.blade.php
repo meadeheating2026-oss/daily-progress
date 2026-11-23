@@ -16,9 +16,9 @@
                             <label class="form-label">{{ __('general.project') }} <span class="text-danger">*</span></label>
                             <select name="project_id" class="form-select @error('project_id') is-invalid @enderror" required>
                                 <option value="">{{ __('general.select_project') }}</option>
-                                @foreach($projects as $project)
-                                    <option value="{{ $project->id }}" {{ old('project_id') == $project->id ? 'selected' : '' }}>
-                                        {{ $project->name }}
+                                @foreach($projects as $projOption)
+                                    <option value="{{ $projOption->id }}" {{ (string) old('project_id', request('project_id')) === (string) $projOption->id ? 'selected' : '' }}>
+                                        {{ $projOption->name }}
                                     </option>
                                 @endforeach
                             </select>

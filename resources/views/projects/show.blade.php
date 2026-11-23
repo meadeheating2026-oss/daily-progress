@@ -1,4 +1,5 @@
 @extends('layouts.app')
+
 @section('breadcrumb')
     <li class="breadcrumb-item">
         <a href="{{ route('dashboard') }}" class="text-muted text-decoration-none">
@@ -10,1164 +11,1050 @@
             {{ __('general.projects') }}
         </a>
     </li>
+    <li class="breadcrumb-item active">{{ __('general.project_details') }}</li>
 @endsection
 
-@section('title', __('general.project_dashboard'))
+@section('title', __('general.project_details') . ' - ' . $project->name)
+
+@push('styles')
+<style>
+    .kon-details-page .kon-section-card {
+        background: var(--surface, #ffffff);
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .kon-details-page .kon-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--line, #e2e8f0);
+        flex-wrap: wrap;
+    }
+
+    .kon-details-page .kon-section-title {
+        font-size: 1.02rem;
+        font-weight: 700;
+        color: var(--ink, #0f172a);
+        margin: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .kon-details-page .kon-section-title i {
+        color: var(--brand, #213c7a);
+    }
+
+    .kon-details-page .kon-kpi-card {
+        background: var(--surface, #ffffff);
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 14px;
+        padding: 1.15rem 1.25rem;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+
+    .kon-details-page .kon-kpi-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        flex-shrink: 0;
+    }
+
+    .kon-details-page .kon-kpi-value {
+        font-size: 1.65rem;
+        font-weight: 800;
+        color: var(--ink, #0f172a);
+        line-height: 1.15;
+    }
+
+    .kon-details-page .kon-kpi-label {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--ink-3, #64748b);
+    }
+
+    .kon-details-page .kon-meta-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .kon-details-page .kon-meta-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.65rem 0;
+        border-bottom: 1px dashed var(--line, #e2e8f0);
+        font-size: 0.88rem;
+    }
+
+    .kon-details-page .kon-meta-list li:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .kon-details-page .kon-meta-key {
+        color: var(--ink-3, #64748b);
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .kon-details-page .kon-meta-val {
+        color: var(--ink, #0f172a);
+        font-weight: 700;
+        text-align: end;
+    }
+
+    .kon-details-page .kon-chart-box {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+
+    .kon-details-page .kon-milestone-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    @media (max-width: 991.98px) {
+        .kon-details-page .kon-milestone-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .kon-details-page .kon-milestone-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .kon-details-page .kon-milestone-card {
+        background: var(--surface-2, #f8fafc);
+        border: 1px solid var(--line, #e2e8f0);
+        border-inline-start: 4px solid var(--brand, #213c7a);
+        border-radius: 12px;
+        padding: 1rem 1.1rem;
+    }
+
+    .kon-details-page .kon-milestone-card.is-done {
+        border-inline-start-color: var(--good, #16803c);
+    }
+
+    .kon-details-page .kon-milestone-card.is-current {
+        background: rgba(33, 60, 122, 0.04);
+        border-color: rgba(33, 60, 122, 0.25);
+        border-inline-start-color: var(--brand, #213c7a);
+    }
+
+    .kon-details-page .kon-details-table th {
+        background: var(--surface-2, #f8fafc);
+        color: var(--ink-2, #334155);
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 0.75rem 0.9rem;
+        border-bottom: 1px solid var(--line-2, #cbd5e1);
+        white-space: nowrap;
+    }
+
+    .kon-details-page .kon-details-table td {
+        padding: 0.8rem 0.9rem;
+        vertical-align: middle;
+        border-bottom: 1px solid var(--line, #e2e8f0);
+        font-size: 0.875rem;
+    }
+
+    .kon-details-page .kon-emp-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        background: var(--surface-2, #f8fafc);
+        border: 1px solid var(--line, #e2e8f0);
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--ink-2, #334155);
+    }
+
+    .kon-details-page .kon-emp-avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--brand, #213c7a);
+        color: #ffffff;
+        font-size: 0.68rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>
+@endpush
 
 @section('content')
-<style>
-:root {
-    --primary: #3498db;
-    --primary-dark: #2980b9;
-    --secondary: #2c3e50;
-    --secondary-light: #34495e;
-    --success: #27ae60;
-    --success-light: #2ecc71;
-    --warning: #f39c12;
-    --warning-light: #f1c40f;
-    --danger: #e74c3c;
-    --danger-light: #e67e22;
-    --light: #f8f9fa;
-    --light-gray: #ecf0f1;
-    --dark: #2d3748;
-    --dark-light: #4a5568;
-    --purple: #9b59b6;
-    --pink: #e84393;
-    --teal: #1abc9c;
-    --cyan: #00c9ff;
-    --gray-100: #f8f9fa;
-    --gray-200: #e9ecef;
-    --gray-300: #dee2e6;
-    --gray-400: #ced4da;
-    --gray-500: #adb5bd;
-    --gray-600: #6c757d;
-    --gray-700: #495057;
-    --gray-800: #343a40;
-    --gray-900: #212529;
-    --box-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
-    --box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-    --box-shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
-    --border-radius: 8px;
-    --border-radius-lg: 12px;
-    --border-radius-xl: 16px;
-    --font-family-sans-serif: 'Tajawal', 'Segoe UI', system-ui, -apple-system, sans-serif;
-    --transition: all 0.3s ease;
-}
+@php
+    $now = \Carbon\Carbon::today();
+    $startDate = $project->start_date ? \Carbon\Carbon::parse($project->start_date)->startOfDay() : null;
+    $endDate = $project->end_date ? \Carbon\Carbon::parse($project->end_date)->startOfDay() : null;
 
-.project-dashboard {
-    background-color: #f8f9fa;
-    font-family: var(--font-family-sans-serif);
-    color: var(--gray-800);
-    line-height: 1.6;
-}
+    $totalDurationDays = ($startDate && $endDate) ? max(0, (int) $startDate->diffInDays($endDate)) : null;
+    $daysPassed = $startDate ? ($now->greaterThan($startDate) ? (int) $startDate->diffInDays($now) : 0) : null;
+    $daysRemaining = $endDate ? ($endDate->greaterThan($now) ? (int) $now->diffInDays($endDate) : 0) : null;
+    $isOverdue = $endDate && $now->greaterThan($endDate) && $project->status !== 'completed';
 
+    $totalItemsCount = $project->items->count();
+    $completedItemsCount = $project->items->filter(fn($it) => $it->completion_percentage >= 100)->count();
+    $inProgressItemsCount = $project->items->filter(fn($it) => $it->completion_percentage > 0 && $it->completion_percentage < 100)->count();
+    $notStartedItemsCount = max(0, $totalItemsCount - $completedItemsCount - $inProgressItemsCount);
 
-.dashboard-header {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: white;
-    padding: 2rem 0;
-    border-bottom: none;
-    box-shadow: var(--box-shadow);
-    position: relative;
-    overflow: hidden;
-}
+    $clampedOverall = min(100, max(0, (float) $overallProgress));
+    $overallLabelClass = $clampedOverall >= 52 ? 'on-dark' : 'on-light';
 
-.dashboard-header::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    right: -50%;
-    width: 100%;
-    height: 200%;
-    background: rgba(255, 255, 255, 0.1);
-    transform: rotate(-5deg);
-}
-
-.dashboard-header h1 {
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    margin-bottom: 0.25rem;
-}
-
-.dashboard-header p {
-    opacity: 0.9;
-    font-weight: 300;
-}
-
-
-.stat-card {
-    border-radius: var(--border-radius-lg);
-    box-shadow: var(--box-shadow-sm);
-    transition: var(--transition);
-    height: 100%;
-    border: none;
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-    background: white;
-}
-
-.stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--box-shadow);
-}
-
-.stat-card .card-body {
-    display: flex;
-    align-items: center;
-    padding: 1.5rem;
-}
-
-.stat-icon {
-    font-size: 1.75rem;
-    width: 60px;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    margin-left: 15px;
-    flex-shrink: 0;
-    box-shadow: var(--box-shadow-sm);
-}
-
-.stat-card .card-title {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--gray-600);
-    margin-bottom: 0.5rem;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-
-.stat-card h3 {
-    font-weight: 700;
-    font-size: 1.75rem;
-    margin-bottom: 0;
-    color: var(--dark);
-}
-
-
-.chart-container {
-    position: relative;
-    height: 300px;
-    margin: 1rem 0;
-}
-
-
-.progress-container {
-    background: white;
-    border-radius: var(--border-radius);
-    padding: 1.25rem;
-    box-shadow: var(--box-shadow-sm);
-    border: 1px solid var(--gray-200);
-    margin-bottom: 1.25rem;
-    transition: var(--transition);
-}
-
-.progress-container:hover {
-    box-shadow: var(--box-shadow);
-}
-
-.progress-bar-animated {
-    position: relative;
-    overflow: hidden;
-    border-radius: 100px;
-    height: 20px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.progress-bar-animated::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-    animation: progressGlow 2s infinite;
-    border-radius: inherit;
-}
-
-@keyframes progressGlow {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-
-.progress-label {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-weight: 700;
-    font-size: 0.8rem;
-    color: white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-
-.section-title {
-    position: relative;
-    padding-bottom: 0.75rem;
-    margin-bottom: 1.5rem;
-    font-weight: 700;
-    color: var(--dark);
-    font-size: 1.35rem;
-}
-
-.section-title::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 50px;
-    height: 4px;
-    background: linear-gradient(to right, var(--primary), var(--teal));
-    border-radius: 10px;
-}
-
-
-.status-badge {
-    padding: 0.5rem 1rem;
-    border-radius: 50px;
-    font-weight: 600;
-    font-size: 0.85rem;
-    box-shadow: var(--box-shadow-sm);
-    letter-spacing: 0.5px;
-}
-
-
-.table {
-    border-collapse: separate;
-    border-spacing: 0;
-    width: 100%;
-    color: var(--gray-700);
-    border-radius: var(--border-radius);
-    overflow: hidden;
-}
-
-.table th {
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.8rem;
-    letter-spacing: 0.5px;
-    border-top: 1px solid var(--gray-300);
-    padding: 0.9rem 0.75rem;
-    background-color: var(--gray-100);
-}
-
-.table td {
-    padding: 1rem 0.75rem;
-    border-top: 1px solid var(--gray-200);
-    vertical-align: middle;
-}
-
-.table tbody tr {
-    transition: var(--transition);
-}
-
-.table tbody tr:hover {
-    background-color: rgba(52, 152, 219, 0.03);
-}
-
-.table-hover tbody tr:hover {
-    background-color: rgba(52, 152, 219, 0.05);
-}
-
-.pivot-highlight {
-    background-color: rgba(52, 152, 219, 0.08);
-    font-weight: 600;
-}
-
-.pivot-highlight td {
-    border-top: 2px solid var(--primary);
-    border-bottom: 2px solid var(--primary);
-}
-
-
-.timeline-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.25rem;
-}
-
-.timeline-item {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 1.25rem;
-    box-shadow: var(--box-shadow-sm);
-    border-left: 4px solid var(--success);
-    position: relative;
-    transition: var(--transition);
-}
-
-.timeline-item:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--box-shadow);
-}
-
-.timeline-item::before {
-    content: '';
-    position: absolute;
-    top: 1.25rem;
-    left: -10px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--success);
-    border: 4px solid white;
-    box-shadow: 0 0 0 2px var(--success);
-}
-
-.timeline-date {
-    font-weight: 600;
-    color: var(--dark);
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-
-.list-group-item {
-    border-color: var(--gray-200);
-    padding: 0.9rem 0;
-}
-
-
-.client-card {
-    display: flex;
-    align-items: center;
-    padding: 1rem;
-    background: linear-gradient(to right, #f8f9fa, white);
-    border-radius: var(--border-radius);
-    margin-bottom: 1.5rem;
-}
-
-.client-icon {
-    width: 60px;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--light);
-    border-radius: 50%;
-    font-size: 1.5rem;
-    color: var(--primary);
-    margin-left: 15px;
-    box-shadow: var(--box-shadow-sm);
-}
-
-
-@media (max-width: 768px) {
-    .dashboard-header {
-        padding: 1.5rem 0;
+    // Map item ID -> sequential index (1..N) for accurate Predecessor display
+    $itemIndexById = [];
+    foreach ($project->items->values() as $idx => $pItem) {
+        $itemIndexById[$pItem->id] = $idx + 1;
     }
 
-    .dashboard-header h1 {
-        font-size: 1.5rem;
+    // Build chart data: Subprojects if available, else grouped by WorkItem name
+    $overviewLabels = [];
+    $overviewActual = [];
+    $overviewRemaining = [];
+
+    if ($project->subprojects->count() > 0) {
+        foreach ($itemsBySubproject as $subName => $subItems) {
+            $totQ = (float) $subItems->sum('total_quantity');
+            $compQ = (float) $subItems->sum('completed_quantity');
+            $pct = $totQ > 0 ? round(min(100, ($compQ / $totQ) * 100), 1) : 0;
+            $overviewLabels[] = \Illuminate\Support\Str::limit($subName, 26);
+            $overviewActual[] = $pct;
+            $overviewRemaining[] = round(max(0, 100 - $pct), 1);
+        }
+    } else {
+        $groupedItems = $project->items->groupBy(fn($it) => $it->workItem->name ?? '-')->take(12);
+        foreach ($groupedItems as $wName => $wItems) {
+            $totQ = (float) $wItems->sum('total_quantity');
+            $compQ = (float) $wItems->sum('completed_quantity');
+            $pct = $totQ > 0 ? round(min(100, ($compQ / $totQ) * 100), 1) : 0;
+            $overviewLabels[] = \Illuminate\Support\Str::limit($wName, 26);
+            $overviewActual[] = $pct;
+            $overviewRemaining[] = round(max(0, 100 - $pct), 1);
+        }
     }
 
-    .stat-card .card-body {
-        padding: 1.25rem;
-        flex-direction: column;
-        text-align: center;
-    }
+    $statusBadgeClass = match($project->status) {
+        'active' => 'bg-success',
+        'completed' => 'bg-primary',
+        'pending' => 'bg-warning',
+        default => 'bg-secondary',
+    };
+    $statusLabel = match($project->status) {
+        'active' => __('general.active'),
+        'completed' => __('general.completed'),
+        'pending' => __('general.pending'),
+        default => __('general.suspended'),
+    };
+@endphp
 
-    .stat-icon {
-        margin-left: 0;
-        margin-bottom: 1rem;
-    }
-
-    .section-title {
-        font-size: 1.2rem;
-    }
-
-    .table-responsive {
-        border-radius: var(--border-radius);
-        border: 1px solid var(--gray-200);
-    }
-
-    .timeline-container {
-        grid-template-columns: 1fr;
-    }
-
-    .client-card {
-        flex-direction: column;
-        text-align: center;
-    }
-
-    .client-icon {
-        margin-left: 0;
-        margin-bottom: 1rem;
-    }
-}
-
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.stat-card {
-    animation: fadeIn 0.5s ease-out forwards;
-}
-
-.stat-card:nth-child(2) { animation-delay: 0.1s; }
-.stat-card:nth-child(3) { animation-delay: 0.2s; }
-.stat-card:nth-child(4) { animation-delay: 0.3s; }
-
-
-body[dir="rtl"] .stat-icon {
-    margin-right: 15px;
-    margin-left: 0;
-}
-
-body[dir="rtl"] .progress-bar-animated::after {
-    animation: progressGlowRTL 2s infinite;
-}
-
-@keyframes progressGlowRTL {
-    0% { transform: translateX(100%); }
-    100% { transform: translateX(-100%); }
-}
-
-body[dir="rtl"] .section-title::after {
-    left: auto;
-    right: 0;
-}
-
-body[dir="rtl"] .timeline-item {
-    border-left: none;
-    border-right: 4px solid var(--success);
-}
-
-body[dir="rtl"] .timeline-item::before {
-    left: auto;
-    right: -10px;
-}
-
-body[dir="rtl"] .client-icon {
-    margin-right: 15px;
-    margin-left: 0;
-}
-
-
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--gray-100);
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--gray-400);
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--gray-500);
-}
-
-
-a:focus,
-button:focus,
-.btn:focus,
-.form-control:focus,
-.form-check-input:focus {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-}
-
-
-@media print {
-    .project-dashboard {
-        background: white !important;
-        color: black !important;
-    }
-
-    .stat-card {
-        box-shadow: none !important;
-        border: 1px solid #ddd !important;
-    }
-
-    .dashboard-header {
-        background: #f1f1f1 !important;
-        color: black !important;
-        box-shadow: none !important;
-    }
-}
-</style>
-
-<div class="project-dashboard">
-    
-    
-    <div class="dashboard-header">
-        <div class="container">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
-                <div class="text-center text-md-start mb-3 mb-md-0">
-                    <h1 class="h3 mb-1">{{ $project->name }}</h1>
-                </div>
-                <div class="text-center text-md-end">
-                    <div class="mb-2">
-                        <span class="badge bg-success status-badge">
-                            @if($project->status == 'active')
-                                {{ __('general.active') }}
-                            @elseif($project->status == 'completed')
-                                {{ __('general.completed') }}
-                            @else
-                                {{ __('general.suspended') }}
-                            @endif
+<div class="kon-details-page">
+    <!-- Top Header Summary Card -->
+    <div class="kon-section-card p-3 p-md-4 mb-4">
+        <div class="row align-items-center g-3">
+            <div class="col-lg-7">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <span class="badge {{ $statusBadgeClass }}">{{ $statusLabel }}</span>
+                    @if($project->type)
+                        <span class="badge bg-light text-dark border">
+                            <i class="fas fa-tag me-1 text-primary"></i>{{ $project->type->name }}
                         </span>
+                    @endif
+                    @if($project->working_zone)
+                        <span class="badge bg-light text-dark border">
+                            <i class="fas fa-location-dot me-1 text-secondary"></i>{{ $project->working_zone }}
+                        </span>
+                    @endif
+                    @if($project->is_draft)
+                        <span class="badge bg-warning">مسودة</span>
+                    @endif
+                </div>
+                <h1 class="h4 fw-bold mb-1" style="color: var(--ink, #0f172a);">{{ $project->name }}</h1>
+                @if($project->description)
+                    <p class="text-muted small mb-0">{{ $project->description }}</p>
+                @endif
+            </div>
+
+            <div class="col-lg-5">
+                <div class="d-flex flex-wrap justify-content-lg-end gap-2 mb-3 no-print">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                        <i class="fas fa-print me-1 text-primary"></i>{{ __('general.print') }}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#saveAsTemplateModal">
+                        <i class="fas fa-layer-group me-1"></i>{{ __('general.save_as_template') }}
+                    </button>
+                </div>
+                <div>
+                    <div class="d-flex justify-content-between align-items-center mb-1 small">
+                        <span class="fw-semibold text-muted">{{ __('general.overall_progress') }}</span>
+                        <span class="fw-bold" style="color: var(--brand, #213c7a);">{{ number_format($clampedOverall, 1) }}%</span>
                     </div>
-                    
-                    <div class="mb-2">
-                        <a href="{{ route('projects.edit', $project->id) }}" class="btn btn-outline-warning btn-sm">
-                            <i class="fas fa-edit me-1"></i>
-                            {{ __('general.edit') }}
-                        </a>
-                    </div>
-                    
-                    <div class="mb-2">
-                        <button type="button" class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#saveAsTemplateModal">
-                            <i class="fas fa-save me-1"></i>
-                            {{ __('general.save_as_template') }}
-                        </button>
-                    </div>
-                    <div class="mt-2">
-                        <small>{{ __('general.last_updated') }}: {{ \Carbon\Carbon::now()->format('d-m-Y H:i') }}</small>
+                    <div class="kon-progress-track" role="progressbar" aria-valuenow="{{ $clampedOverall }}" aria-valuemin="0" aria-valuemax="100">
+                        <div class="kon-progress-fill fill-actual" style="width: {{ $clampedOverall }}%;"></div>
+                        <span class="kon-progress-label {{ $overallLabelClass }}">{{ number_format($clampedOverall, 1) }}%</span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="container py-4">
-        
-        <div class="row g-4 mb-4">
-            <div class="col-md-6 col-lg-3">
-                <div class="stat-card card bg-light h-100">
-                    <div class="card-body py-3">
-                        <div class="d-flex align-items-center">
-                            <div class="stat-icon bg-primary text-white">
-                                <i class="fas fa-tasks"></i>
-                            </div>
-                            <div class="ms-3">
-                                <h5 class="card-title text-muted mb-1">{{ __('general.work_items') }}</h5>
-                                <h3 class="mb-0">{{ count($project->items) }}</h3>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6 col-lg-3">
-                <div class="stat-card card bg-light h-100">
-                    <div class="card-body py-3">
-                        <div class="d-flex align-items-center">
-                            <div class="stat-icon bg-success text-white">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
-                            <div class="ms-3">
-                                <h5 class="card-title text-muted mb-1">{{ __('general.overall_progress') }}</h5>
-                                <h3 class="mb-0">{{ number_format($overallProgress, 1) }}%</h3>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6 col-lg-3">
-                <div class="stat-card card bg-light h-100">
-                    <div class="card-body py-3">
-                        <div class="d-flex align-items-center">
-                            <div class="stat-icon bg-warning text-white">
-                                <i class="fas fa-calendar-alt"></i>
-                            </div>
-                            <div class="ms-3">
-                                <h5 class="card-title text-muted mb-1">{{ __('general.days_remaining') }}</h5>
-                                <h3 class="mb-0">
-                                    @if($project->end_date)
-                                        {{ floor(\Carbon\Carbon::now()->diffInDays(\Carbon\Carbon::parse($project->end_date))) }}
-                                    @else
-                                        {{ __('general.not_specified') }}
-                                    @endif
-                                </h3>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6 col-lg-3">
-                <div class="stat-card card bg-light h-100">
-                    <div class="card-body py-3">
-                        <div class="d-flex align-items-center">
-                            <div class="stat-icon bg-info text-white">
-                                <i class="fas fa-clock"></i>
-                            </div>
-                            <div class="ms-3">
-                                <h5 class="card-title text-muted mb-1">{{ __('general.days_passed') }}</h5>
-                                <h3 class="mb-0">
-                                    @if($project->start_date)
-                                        {{  abs(floor(\Carbon\Carbon::now()->diffInDays(\Carbon\Carbon::parse($project->start_date)))) }}
-                                    @else
-                                        {{ __('general.not_specified') }}
-                                    @endif
-                                </h3>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        
-        <div class="row g-4 mb-4">
-            <div class="col-lg-8">
-                <div class="card stat-card h-100">
-                    <div class="card-body">
-                        <h4 class="section-title">{{ __('general.project_progress_overview') }}</h4>
-                        <div class="chart-container">
-                            <canvas id="progressChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="card stat-card h-100">
-                    <div class="card-body">
-                        <h4 class="section-title">{{ __('general.progress_distribution') }}</h4>
-                        <div class="chart-container">
-                            <canvas id="donutChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        
-        <div class="row g-4 mb-4">
-            <div class="col-lg-6">
-                <div class="card stat-card h-100">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h4 class="section-title mb-0">{{ __('general.work_items_summary') }}</h4>
-                            <span class="badge bg-primary">{{ count($project->items) }} {{ __('general.items') }}</span>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>{{ __('general.work_item') }}</th>
-                                        <th>{{ __('general.predecessor') }}</th>
-                                        <th class="text-end">{{ __('general.progress') }}</th>
-                                        <th class="text-end">{{ __('general.completed') }}</th>
-                                        <th class="text-end">{{ __('general.remaining') }}</th>
-                                        <th class="text-end">{{ __('general.expected_daily_progress') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($project->items as $item)
-                                    <tr>
-                                        <td>
-                                            <div class="fw-bold">
-                                                {{ $item->workItem->name }}
-                                                @if($item->item_label)
-                                                    <span class="badge bg-info ms-2">{{ $item->item_label }}</span>
-                                                @endif
-                                            </div>
-                                            @if($item->workItem->category)
-                                                <small class="text-muted d-block"><i class="fas fa-folder me-1"></i>{{ $item->workItem->category->name }}</small>
-                                            @endif
-                                            <div class="progress mt-2" style="height: 8px;">
-                                                <div class="progress-bar
-                                                    @if($item->completion_percentage >= 80) bg-success
-                                                    @elseif($item->completion_percentage >= 50) bg-primary
-                                                    @elseif($item->completion_percentage >= 30) bg-warning
-                                                    @else bg-danger
-                                                    @endif"
-                                                    role="progressbar"
-                                                    style="width: {{ $item->completion_percentage }}%">
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="align-middle">
-                                            @if($item->predecessor)
-                                                @php
-                                                    $predecessorItem = $project->items->find($item->predecessor);
-                                                @endphp
-                                                @if($predecessorItem)
-                                                    <span class="badge bg-secondary">{{ $predecessorItem->workItem->name }}</span>
-                                                    @if($item->dependency_type == 'start_to_start')
-                                                        <small class="text-muted d-block">{{ __('general.start_to_start') }}</small>
-                                                    @else
-                                                        <small class="text-muted d-block">{{ __('general.end_to_start') }}</small>
-                                                    @endif
-                                                    @if($item->lag != 0)
-                                                        <small class="text-info d-block">{{ __('general.lag') }}: {{ $item->lag }} {{ __('general.days') }}</small>
-                                                    @endif
-                                                @else
-                                                    <span class="text-muted">{{ __('general.predecessor_not_found') }}</span>
-                                                @endif
-                                            @else
-                                                <span class="text-muted">{{ __('general.none') }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="fw-bold text-end align-middle">{{ number_format($item->completion_percentage, 1) }}%</td>
-                                        <td class="text-end align-middle">{{ number_format($item->completed_quantity) }} {{ $item->workItem->unit }}</td>
-                                        <td class="text-end align-middle">{{ number_format($item->remaining_quantity) }} {{ $item->workItem->unit }}</td>
-                                        <td class="text-end align-middle">
-                                            @if($item->estimated_daily_qty)
-                                                <span class="badge bg-info">{{ number_format($item->estimated_daily_qty, 2) }} {{ $item->workItem->unit }}/{{ __('general.day') }}</span>
-                                            @else
-                                                <span class="text-muted">-</span>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                                <tfoot class="table-group-divider">
-                                    <tr class="pivot-highlight">
-                                        <td><strong>{{ __('general.total') }}</strong></td>
-                                        <td></td>
-                                        <td class="fw-bold text-end">{{ number_format($overallProgress, 1) }}%</td>
-                                        <td class="text-end">{{ number_format($project->items->sum('completed_quantity')) }}</td>
-                                        <td class="text-end">{{ number_format($project->items->sum('remaining_quantity')) }}</td>
-                                        <td class="text-end">
-                                            <span class="badge bg-secondary">{{ number_format($project->items->sum('estimated_daily_qty'), 2) }}</span>
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card stat-card h-100">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h4 class="section-title mb-0">{{ __('general.daily_progress_record') }}</h4>
-                            <span class="badge bg-info">{{ $project->dailyProgress->count() }} {{ __('general.records') }}</span>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>{{ __('general.date') }}</th>
-                                        <th>{{ __('general.contact_person') }}</th>
-                                        <th>{{ __('general.work_item') }}</th>
-                                        <th class="text-end">{{ __('general.quantity') }}</th>
-                                        <th class="text-center">{{ __('general.percentage') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($project->dailyProgress->sortByDesc('progress_date')->take(5) as $progress)
-                                    <tr>
-                                        <td class="fw-bold">{{ \Carbon\Carbon::parse($progress->progress_date)->format('Y-m-d') }}</td>
-                                        <td>
-                                            <span class="badge bg-light text-dark">{{ $progress->employee->name }}</span>
-                                        </td>
-                                        <td class="small">{{ $progress->projectItem->workItem->name }}</td>
-                                        <td class="text-end">{{ number_format($progress->quantity) }} {{ $progress->projectItem->workItem->unit }}</td>
-                                        <td class="text-center">
-                                            <span class="badge
-                                                @php
-                                                    $percent = $progress->projectItem->total_quantity > 0 
-                                                        ? ($progress->quantity / $progress->projectItem->total_quantity) * 100 
-                                                        : 0;
-                                                    if($percent >= 10) echo 'bg-success';
-                                                    elseif($percent >= 5) echo 'bg-primary';
-                                                    else echo 'bg-warning';
-                                                @endphp
-                                            ">
-                                                {{ number_format($percent, 1) }}%
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        
-        <div class="card stat-card mb-4">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-4">
+    <!-- 4 KPI Stat Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="kon-kpi-card">
+                <div class="d-flex align-items-center justify-content-between mb-2">
                     <div>
-                        <h4 class="section-title mb-1">{{ __('general.work_items_progress') }}</h4>
-                        <p class="text-muted mb-0">{{ __('general.detailed_progress_each_item') }}</p>
+                        <div class="kon-kpi-label mb-1">{{ __('general.work_items') }}</div>
+                        <div class="kon-kpi-value">{{ $totalItemsCount }}</div>
                     </div>
-                    <div class="badge bg-purple">{{ __('general.visual_progress') }}</div>
+                    <div class="kon-kpi-icon bg-primary bg-opacity-10 text-primary">
+                        <i class="fas fa-list-check"></i>
+                    </div>
                 </div>
-
-                <div class="row">
-                    @foreach($project->items as $item)
-                    <div class="col-md-6">
-                        <div class="progress-container">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <div>
-                                    <span class="fw-bold">{{ $item->workItem->name }}</span>
-                                    <span class="badge bg-light text-dark ms-2">{{ $item->workItem->unit }}</span>
-                                </div>
-                                <span class="fw-bold">{{ number_format($item->completion_percentage, 1) }}%</span>
-                            </div>
-                            <div class="progress" style="position: relative;">
-                                <div class="progress-bar
-                                    @if($item->completion_percentage >= 80) bg-success
-                                    @elseif($item->completion_percentage >= 50) bg-primary
-                                    @elseif($item->completion_percentage >= 30) bg-warning
-                                    @else bg-danger
-                                    @endif
-                                    progress-bar-animated"
-                                    role="progressbar"
-                                    style="width: {{ $item->completion_percentage }}%">
-                                </div>
-                                <div class="progress-label">{{ number_format($item->completion_percentage, 1) }}%</div>
-                            </div>
-                            <div class="d-flex justify-content-between mt-2 text-muted small">
-                                <span>{{ __('general.completed') }}: {{ number_format($item->completed_quantity) }}</span>
-                                <span>{{ __('general.remaining') }}: {{ number_format($item->remaining_quantity) }}</span>
-                                <span>{{ __('general.total') }}: {{ number_format($item->total_quantity) }}</span>
-                            </div>
-                            @if($item->estimated_daily_qty)
-                                <div class="mt-2">
-                                    <span class="badge bg-info">
-                                        <i class="fas fa-chart-line me-1"></i>
-                                        {{ __('general.expected_daily') }}: {{ number_format($item->estimated_daily_qty, 2) }} {{ $item->workItem->unit }}/{{ __('general.day') }}
-                                    </span>
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-                    @endforeach
+                <div class="small text-muted">
+                    <span class="text-success fw-semibold">{{ $completedItemsCount }}</span> مكتمل •
+                    <span class="text-primary fw-semibold">{{ $inProgressItemsCount }}</span> جاري
                 </div>
             </div>
         </div>
 
-        
-        <div class="card stat-card mb-4">
-            <div class="card-body">
-                <h4 class="section-title">{{ __('general.project_timeline') }}</h4>
-                <p class="text-muted mb-4">{{ __('general.key_dates_milestones') }}</p>
-
-                <div class="timeline-container">
-                    <div class="timeline-item">
-                        <div class="timeline-date">{{ __('general.start_date') }}</div>
-                        <div class="fw-bold">{{ $project->start_date ? \Carbon\Carbon::parse($project->start_date)->format('Y-m-d') : __('general.not_specified') }}</div>
-                        <div class="text-muted small">{{ __('general.project_kickoff') }}</div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="kon-kpi-card">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                        <div class="kon-kpi-label mb-1">{{ __('general.overall_progress') }}</div>
+                        <div class="kon-kpi-value">{{ number_format($clampedOverall, 1) }}%</div>
                     </div>
+                    <div class="kon-kpi-icon bg-success bg-opacity-10 text-success">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                </div>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar bg-success" style="width: {{ $clampedOverall }}%"></div>
+                </div>
+            </div>
+        </div>
 
-                    <div class="timeline-item">
-                        <div class="timeline-date">{{ __('general.mid_point') }}</div>
-                        @if($project->start_date && $project->end_date)
-                            @php
-                                $midDate = \Carbon\Carbon::parse($project->start_date)
-                                    ->addDays(\Carbon\Carbon::parse($project->start_date)
-                                    ->diffInDays(\Carbon\Carbon::parse($project->end_date)) / 2);
-                            @endphp
-                            <div class="fw-bold">{{ $midDate->format('Y-m-d') }}</div>
-                        @else
-                            <div class="fw-bold">{{ __('general.not_specified') }}</div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="kon-kpi-card">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                        <div class="kon-kpi-label mb-1">{{ __('general.days_passed') }}</div>
+                        <div class="kon-kpi-value">
+                            {{ $daysPassed !== null ? $daysPassed : '—' }}
+                        </div>
+                    </div>
+                    <div class="kon-kpi-icon" style="background: rgba(71, 85, 105, 0.10); color: #334155;">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+                <div class="small text-muted">
+                    @if($totalDurationDays !== null)
+                        من إجمالي <strong>{{ $totalDurationDays }}</strong> {{ __('general.days') }}
+                    @else
+                        {{ __('general.not_specified') }}
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="kon-kpi-card">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                        <div class="kon-kpi-label mb-1">{{ __('general.days_remaining') }}</div>
+                        <div class="kon-kpi-value {{ $isOverdue ? 'text-danger' : '' }}">
+                            {{ $daysRemaining !== null ? $daysRemaining : '—' }}
+                        </div>
+                    </div>
+                    <div class="kon-kpi-icon bg-primary bg-opacity-10 text-primary">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                </div>
+                <div class="small {{ $isOverdue ? 'text-danger fw-semibold' : 'text-muted' }}">
+                    @if($isOverdue)
+                        تجاوز تاريخ الانتهاء المحدد
+                    @elseif($endDate)
+                        حتى {{ $endDate->format('Y-m-d') }}
+                    @else
+                        {{ __('general.not_specified') }}
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Info, Client Info & Team Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-4">
+            <div class="kon-section-card h-100">
+                <div class="kon-section-head">
+                    <h2 class="kon-section-title">
+                        <i class="fas fa-circle-info"></i>
+                        <span>{{ __('general.project_information') }}</span>
+                    </h2>
+                </div>
+                <div class="p-3">
+                    <ul class="kon-meta-list">
+                        <li>
+                            <span class="kon-meta-key"><i class="fas fa-play text-success"></i>{{ __('general.start_date') }}</span>
+                            <span class="kon-meta-val">{{ $startDate ? $startDate->format('Y-m-d') : __('general.not_specified') }}</span>
+                        </li>
+                        <li>
+                            <span class="kon-meta-key"><i class="fas fa-flag-checkered text-primary"></i>{{ __('general.end_date') }}</span>
+                            <span class="kon-meta-val">{{ $endDate ? $endDate->format('Y-m-d') : __('general.not_specified') }}</span>
+                        </li>
+                        <li>
+                            <span class="kon-meta-key"><i class="fas fa-hourglass-half text-secondary"></i>{{ __('general.project_duration') }}</span>
+                            <span class="kon-meta-val">
+                                {{ $totalDurationDays !== null ? $totalDurationDays . ' ' . __('general.days') : __('general.not_specified') }}
+                            </span>
+                        </li>
+                        <li>
+                            <span class="kon-meta-key"><i class="fas fa-location-dot text-secondary"></i>{{ __('general.working_zone') }}</span>
+                            <span class="kon-meta-val">{{ $project->working_zone ?: __('general.not_specified') }}</span>
+                        </li>
+                        @if($project->daily_work_hours)
+                        <li>
+                            <span class="kon-meta-key"><i class="fas fa-business-time text-secondary"></i>ساعات العمل اليومية</span>
+                            <span class="kon-meta-val">{{ $project->daily_work_hours }} س</span>
+                        </li>
                         @endif
-                        <div class="text-muted small">{{ __('general.expected_50_completion') }}</div>
-                    </div>
-
-                    <div class="timeline-item">
-                        <div class="timeline-date">{{ __('general.current_date') }}</div>
-                        <div class="fw-bold">{{ \Carbon\Carbon::now()->format('Y-m-d') }}</div>
-                        <div class="text-muted small">{{ __('general.progress') }}: {{ number_format($overallProgress, 1) }}%</div>
-                    </div>
-
-                    <div class="timeline-item">
-                        <div class="timeline-date">{{ __('general.end_date') }}</div>
-                        <div class="fw-bold">{{ $project->end_date ? \Carbon\Carbon::parse($project->end_date)->format('Y-m-d') : __('general.not_specified') }}</div>
-                        <div class="text-muted small">{{ __('general.expected_completion') }}</div>
-                    </div>
+                        <li>
+                            <span class="kon-meta-key"><i class="fas fa-sitemap text-primary"></i>المشاريع الفرعية</span>
+                            <span class="kon-meta-val">{{ $project->subprojects->count() }}</span>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
 
-        
-        <div class="row g-4">
-            <div class="col-lg-6">
-                <div class="card stat-card h-100">
-                    <div class="card-body">
-                        <h4 class="section-title">{{ __('general.project_information') }}</h4>
-                        <p class="mb-4">{{ $project->description }}</p>
+        <div class="col-lg-4">
+            <div class="kon-section-card h-100">
+                <div class="kon-section-head">
+                    <h2 class="kon-section-title">
+                        <i class="fas fa-building"></i>
+                        <span>{{ __('general.client_information') }}</span>
+                    </h2>
+                </div>
+                <div class="p-3">
+                    @if($project->client)
+                        <div class="d-flex align-items-center gap-3 mb-3 pb-2 border-bottom">
+                            <div class="kon-kpi-icon bg-primary bg-opacity-10 text-primary">
+                                <i class="fas fa-building"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="fw-bold text-truncate" style="color: var(--ink, #0f172a);">{{ $project->client->name }}</div>
+                                @if($project->client->contact_person)
+                                    <div class="small text-muted text-truncate">{{ $project->client->contact_person }}</div>
+                                @endif
+                            </div>
+                        </div>
+                        <ul class="kon-meta-list">
+                            <li>
+                                <span class="kon-meta-key"><i class="fas fa-phone text-success"></i>{{ __('general.phone') }}</span>
+                                <span class="kon-meta-val" dir="ltr">{{ $project->client->phone ?: __('general.not_specified') }}</span>
+                            </li>
+                            <li>
+                                <span class="kon-meta-key"><i class="fas fa-envelope text-primary"></i>{{ __('general.email') }}</span>
+                                <span class="kon-meta-val text-truncate" style="max-width: 190px;">{{ $project->client->email ?: __('general.not_specified') }}</span>
+                            </li>
+                            <li>
+                                <span class="kon-meta-key"><i class="fas fa-map-marker-alt text-secondary"></i>{{ __('general.address') }}</span>
+                                <span class="kon-meta-val">{{ $project->client->address ?: __('general.not_specified') }}</span>
+                            </li>
+                        </ul>
+                    @else
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-building fa-2x mb-2 opacity-50"></i>
+                            <p class="mb-0 small">{{ __('general.no_client_assigned') }}</p>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
 
-                        <div class="list-group list-group-flush">
-                            <div class="list-group-item px-0">
-                                <div class="d-flex justify-content-between">
-                                    <strong>{{ __('general.start_date') }}:</strong>
-                                    <span>{{ $project->start_date ? \Carbon\Carbon::parse($project->start_date)->format('Y-m-d') : __('general.not_specified') }}</span>
-                                </div>
-                            </div>
-                            <div class="list-group-item px-0">
-                                <div class="d-flex justify-content-between">
-                                    <strong>{{ __('general.end_date') }}:</strong>
-                                    <span>{{ $project->end_date ? \Carbon\Carbon::parse($project->end_date)->format('Y-m-d') : __('general.not_specified') }}</span>
-                                </div>
-                            </div>
-                            <div class="list-group-item px-0">
-                                <div class="d-flex justify-content-between">
-                                    <strong>{{ __('general.project_duration') }}:</strong>
-                                    <span>
-                                        @if($project->start_date && $project->end_date)
-                                            {{ \Carbon\Carbon::parse($project->start_date)->diffInDays(\Carbon\Carbon::parse($project->end_date)) }} {{ __('general.days') }}
-                                        @else
-                                            {{ __('general.not_specified') }}
-                                        @endif
+        <div class="col-lg-4">
+            <div class="kon-section-card h-100">
+                <div class="kon-section-head">
+                    <h2 class="kon-section-title">
+                        <i class="fas fa-users"></i>
+                        <span>{{ __('general.team_members') }}</span>
+                    </h2>
+                    <span class="badge bg-primary">{{ $project->employees->count() }}</span>
+                </div>
+                <div class="p-3">
+                    @if($project->employees->count() > 0)
+                        <div class="d-flex flex-wrap gap-2" style="max-height: 195px; overflow-y: auto;">
+                            @foreach($project->employees as $emp)
+                                <span class="kon-emp-chip" title="{{ $emp->position ?? '' }}">
+                                    <span class="kon-emp-avatar">{{ mb_substr($emp->name, 0, 1) }}</span>
+                                    <span>{{ $emp->name }}</span>
+                                </span>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-users fa-2x mb-2 opacity-50"></i>
+                            <p class="mb-0 small">{{ __('general.no_employees_assigned') }}</p>
+                        </div>
+                    @endif
+
+                    @if($project->subprojects->count() > 0)
+                        <div class="mt-3 pt-3 border-top">
+                            <div class="small fw-bold text-muted mb-2">أوزان المشاريع الفرعية:</div>
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach($project->subprojects as $sp)
+                                    <span class="badge bg-light text-dark border">
+                                        {{ $sp->name }} @if($sp->weight)<strong class="text-primary">({{ $sp->weight }}%)</strong>@endif
                                     </span>
-                                </div>
+                                @endforeach
                             </div>
-                            <div class="list-group-item px-0">
-                                <div class="d-flex justify-content-between">
-                                    <strong>{{ __('general.working_zone') }}:</strong>
-                                    <span>{{ $project->working_zone }}</span>
-                                </div>
-                            </div>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <div class="kon-section-card h-100">
+                <div class="kon-section-head">
+                    <h2 class="kon-section-title">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>{{ __('general.project_progress_overview') }}</span>
+                    </h2>
+                    <span class="small text-muted">
+                        {{ $project->subprojects->count() > 0 ? 'حسب المشروع الفرعي' : 'حسب بنود العمل' }}
+                    </span>
+                </div>
+                <div class="p-3">
+                    @if(count($overviewLabels) > 0)
+                        <div class="kon-chart-box">
+                            <canvas id="detailsProgressChart"></canvas>
+                        </div>
+                    @else
+                        <div class="text-center py-5 text-muted">لا توجد بنود لعرض الرسم البياني</div>
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="kon-section-card h-100">
+                <div class="kon-section-head">
+                    <h2 class="kon-section-title">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>{{ __('general.progress_distribution') }}</span>
+                    </h2>
+                </div>
+                <div class="p-3 d-flex flex-column justify-content-between">
+                    <div class="kon-chart-box" style="height: 235px;">
+                        <canvas id="detailsDonutChart"></canvas>
+                    </div>
+                    <div class="d-flex justify-content-around text-center border-top pt-3 mt-2 small">
+                        <div>
+                            <div class="fw-bold text-success">{{ $completedItemsCount }}</div>
+                            <div class="text-muted">مكتمل</div>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-primary">{{ $inProgressItemsCount }}</div>
+                            <div class="text-muted">قيد التنفيذ</div>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-secondary">{{ $notStartedItemsCount }}</div>
+                            <div class="text-muted">لم يبدأ</div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <div class="col-lg-6">
-                <div class="card stat-card h-100">
-                    <div class="card-body">
-                        <h4 class="section-title">{{ __('general.client_information') }}</h4>
+    <!-- Project Timeline Milestones -->
+    <div class="kon-section-card mb-4">
+        <div class="kon-section-head">
+            <h2 class="kon-section-title">
+                <i class="fas fa-project-diagram"></i>
+                <span>{{ __('general.project_timeline') }}</span>
+            </h2>
+            <span class="small text-muted">{{ __('general.key_dates_milestones') }}</span>
+        </div>
+        <div class="p-3">
+            @php
+                $midDate = ($startDate && $endDate)
+                    ? $startDate->copy()->addDays((int) floor($startDate->diffInDays($endDate) / 2))
+                    : null;
+            @endphp
+            <div class="kon-milestone-grid">
+                <div class="kon-milestone-card is-done">
+                    <div class="small text-muted fw-semibold mb-1">{{ __('general.start_date') }}</div>
+                    <div class="fw-bold fs-6" style="color: var(--ink, #0f172a);">{{ $startDate ? $startDate->format('Y-m-d') : __('general.not_specified') }}</div>
+                    <div class="small text-success mt-1"><i class="fas fa-check-circle me-1"></i>{{ __('general.project_kickoff') }}</div>
+                </div>
 
-                        <div class="d-flex align-items-center mb-4">
-                            <div class="bg-light p-3 rounded-circle me-3">
-                                <i class="fas fa-building fa-2x text-primary"></i>
-                            </div>
-                            <div>
-                                <h5 class="mb-0">{{ $project->client->name }}</h5>
-                                <p class="text-muted mb-0">{{ $project->client->contact_person }}</p>
-                            </div>
-                        </div>
+                <div class="kon-milestone-card">
+                    <div class="small text-muted fw-semibold mb-1">{{ __('general.mid_point') }}</div>
+                    <div class="fw-bold fs-6" style="color: var(--ink, #0f172a);">{{ $midDate ? $midDate->format('Y-m-d') : __('general.not_specified') }}</div>
+                    <div class="small text-muted mt-1">{{ __('general.expected_50_completion') }}</div>
+                </div>
 
-                        <div class="list-group list-group-flush">
-                            <div class="list-group-item px-0">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-phone me-3 text-success"></i>
-                                    <span>{{ $project->client->phone }}</span>
-                                </div>
-                            </div>
-                            <div class="list-group-item px-0">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-envelope me-3 text-info"></i>
-                                    <span>{{ $project->client->email }}</span>
-                                </div>
-                            </div>
-                            <div class="list-group-item px-0">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-map-marker-alt me-3 text-danger"></i>
-                                    <span>{{ $project->client->address ?? __('general.not_specified') }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="kon-milestone-card is-current">
+                    <div class="small text-primary fw-semibold mb-1">{{ __('general.current_date') }}</div>
+                    <div class="fw-bold fs-6" style="color: var(--ink, #0f172a);">{{ $now->format('Y-m-d') }}</div>
+                    <div class="small text-primary fw-semibold mt-1">{{ __('general.progress') }}: {{ number_format($clampedOverall, 1) }}%</div>
+                </div>
+
+                <div class="kon-milestone-card">
+                    <div class="small text-muted fw-semibold mb-1">{{ __('general.end_date') }}</div>
+                    <div class="fw-bold fs-6" style="color: var(--ink, #0f172a);">{{ $endDate ? $endDate->format('Y-m-d') : __('general.not_specified') }}</div>
+                    <div class="small text-muted mt-1">{{ __('general.expected_completion') }}</div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Full-Width Work Items Summary Table with Instant Filter -->
+    <div class="kon-section-card mb-4">
+        <div class="kon-section-head">
+            <div class="d-flex align-items-center gap-2">
+                <h2 class="kon-section-title">
+                    <i class="fas fa-table-list"></i>
+                    <span>{{ __('general.work_items_summary') }}</span>
+                </h2>
+                <span class="badge bg-primary" id="detailsItemsBadge">{{ $totalItemsCount }} {{ __('general.items') }}</span>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-2 no-print">
+                @if($project->subprojects->count() > 0)
+                    <select id="detailsSubprojectFilter" class="form-select form-select-sm" style="width: auto; min-width: 170px;">
+                        <option value="">كل المشاريع الفرعية</option>
+                        @foreach($itemsBySubproject->keys() as $spKey)
+                            <option value="{{ strtolower($spKey) }}">{{ $spKey }}</option>
+                        @endforeach
+                    </select>
+                @endif
+                <div class="input-group input-group-sm" style="width: 230px;">
+                    <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" id="detailsItemSearch" class="form-control" placeholder="ابحث في البنود أو الملاحظات...">
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table kon-details-table mb-0" id="detailsItemsTable">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;" class="text-center">#</th>
+                        <th>{{ __('general.work_item') }}</th>
+                        @if($project->subprojects->count() > 0)
+                            <th>المشروع الفرعي</th>
+                        @endif
+                        <th>{{ __('general.predecessor') }}</th>
+                        <th class="text-center">الكمية (منفذ / إجمالي)</th>
+                        <th class="text-center">{{ __('general.expected_daily_progress') }}</th>
+                        <th style="min-width: 175px;">{{ __('general.progress') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($project->items->values() as $idx => $item)
+                        @php
+                            $rowNum = $idx + 1;
+                            $pct = min(100, max(0, (float) $item->completion_percentage));
+                            $predItem = $item->predecessor ? $project->items->firstWhere('id', $item->predecessor) : null;
+                            $predNum = ($predItem && isset($itemIndexById[$predItem->id])) ? $itemIndexById[$predItem->id] : null;
+                            $subName = $item->subproject_name ?? __('general.without_subproject');
+                        @endphp
+                        <tr class="details-item-row"
+                            data-subproject="{{ strtolower($subName) }}"
+                            data-search="{{ strtolower(($item->workItem->name ?? '') . ' ' . ($item->notes ?? '') . ' ' . ($item->workItem->category->name ?? '') . ' ' . $subName) }}">
+                            <td class="text-center fw-bold text-muted">{{ $rowNum }}</td>
+                            <td>
+                                <div class="fw-bold" style="color: var(--ink, #0f172a);">
+                                    {{ $item->workItem->name ?? '-' }}
+                                    @if($item->item_label)
+                                        <span class="badge bg-light text-primary border ms-1">{{ $item->item_label }}</span>
+                                    @endif
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 small text-muted mt-1">
+                                    @if($item->workItem->category ?? null)
+                                        <span><i class="fas fa-folder me-1"></i>{{ $item->workItem->category->name }}</span>
+                                    @endif
+                                    @if($item->notes)
+                                        <span><i class="fas fa-sticky-note me-1"></i>{{ \Illuminate\Support\Str::limit($item->notes, 45) }}</span>
+                                    @endif
+                                    @if($item->start_date && $item->end_date)
+                                        <span><i class="fas fa-calendar me-1"></i>{{ \Carbon\Carbon::parse($item->start_date)->format('Y-m-d') }} ← {{ \Carbon\Carbon::parse($item->end_date)->format('Y-m-d') }}</span>
+                                    @endif
+                                </div>
+                            </td>
+
+                            @if($project->subprojects->count() > 0)
+                                <td>
+                                    <span class="badge bg-light text-dark border">{{ $subName }}</span>
+                                </td>
+                            @endif
+
+                            <td>
+                                @if($predItem)
+                                    <div class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded border bg-light small">
+                                        @if($predNum)
+                                            <span class="badge bg-primary">{{ $predNum }}</span>
+                                        @endif
+                                        <span class="fw-semibold text-dark">{{ \Illuminate\Support\Str::limit($predItem->workItem->name ?? '-', 28) }}</span>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">
+                                        {{ $item->dependency_type === 'start_to_start' ? __('general.start_to_start') : __('general.end_to_start') }}
+                                        @if($item->lag != 0)
+                                            • {{ __('general.lag') }}: {{ $item->lag }} {{ __('general.days') }}
+                                        @endif
+                                    </small>
+                                @else
+                                    <span class="text-muted small">{{ __('general.none') }}</span>
+                                @endif
+                            </td>
+
+                            <td class="text-center">
+                                <span class="fw-bold text-success">{{ number_format($item->completed_quantity, 2) }}</span>
+                                <span class="text-muted">/</span>
+                                <span class="fw-semibold">{{ number_format($item->total_quantity, 2) }}</span>
+                                <small class="text-muted d-block">{{ $item->workItem->unit ?? '' }} (متبقي: {{ number_format($item->remaining_quantity, 2) }})</small>
+                            </td>
+
+                            <td class="text-center">
+                                @if($item->estimated_daily_qty)
+                                    <span class="badge bg-light text-dark border">
+                                        {{ number_format($item->estimated_daily_qty, 2) }} {{ $item->workItem->unit ?? '' }}/{{ __('general.day') }}
+                                    </span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
+
+                            <td>
+                                <div class="kon-progress-track" style="height: 22px;">
+                                    <div class="kon-progress-fill {{ $pct >= 80 ? 'fill-actual' : 'fill-planned' }}" style="width: {{ $pct }}%;"></div>
+                                    <span class="kon-progress-label {{ $pct >= 52 ? 'on-dark' : 'on-light' }}" style="font-size: 0.74rem;">{{ number_format($pct, 1) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="{{ $project->subprojects->count() > 0 ? 7 : 6 }}" class="text-center py-4 text-muted">
+                                لا توجد بنود مضافة لهذا المشروع بعد.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Latest Daily Progress Records -->
+    <div class="kon-section-card mb-4">
+        <div class="kon-section-head">
+            <div class="d-flex align-items-center gap-2">
+                <h2 class="kon-section-title">
+                    <i class="fas fa-clock-rotate-left"></i>
+                    <span>{{ __('general.daily_progress_record') }}</span>
+                </h2>
+                <span class="badge bg-secondary">{{ $dailyProgressCount }} {{ __('general.records') }}</span>
+            </div>
+            <div class="d-flex gap-2 no-print">
+                <a href="{{ route('projects.progress', $project->id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-table me-1"></i>{{ __('general.progress_report') }}
+                </a>
+                @can('dailyprogress-create')
+                    <a href="{{ route('daily-progress.create', ['project_id' => $project->id]) }}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus me-1"></i>{{ __('general.add_progress') }}
+                    </a>
+                @endcan
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table kon-details-table mb-0">
+                <thead>
+                    <tr>
+                        <th>{{ __('general.date') }}</th>
+                        <th>الموظف</th>
+                        <th>{{ __('general.work_item') }}</th>
+                        <th class="text-center">{{ __('general.quantity') }}</th>
+                        <th class="text-center">مساهمة السجل من البند</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($recentDailyProgress as $progress)
+                        @php
+                            $itemTotalQty = (float) ($progress->projectItem->total_quantity ?? 0);
+                            $contribPct = $itemTotalQty > 0 ? min(100, ($progress->quantity / $itemTotalQty) * 100) : 0;
+                        @endphp
+                        <tr>
+                            <td class="fw-bold">{{ \Carbon\Carbon::parse($progress->progress_date)->format('Y-m-d') }}</td>
+                            <td>
+                                <span class="badge bg-light text-dark border">
+                                    <i class="fas fa-user me-1 text-primary"></i>{{ $progress->employee->name ?? 'غير محدد' }}
+                                </span>
+                            </td>
+                            <td class="fw-semibold">{{ $progress->projectItem->workItem->name ?? '-' }}</td>
+                            <td class="text-center fw-bold text-primary">
+                                {{ number_format($progress->quantity, 2) }}
+                                <small class="text-muted">{{ $progress->projectItem->workItem->unit ?? '' }}</small>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge {{ $contribPct >= 10 ? 'bg-success' : 'bg-primary' }}">
+                                    {{ number_format($contribPct, 1) }}%
+                                </span>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                لا توجد سجلات تقدم يومي مسجلة لهذا المشروع حتى الآن.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
-
-
+<!-- Save As Template Modal -->
 <div class="modal fade" id="saveAsTemplateModal" tabindex="-1" aria-labelledby="saveAsTemplateModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form id="saveAsTemplateForm" action="{{ route('projects.save-as-template', $project) }}" method="POST">
                 @csrf
-                <div class="modal-header">
-                    <h5 class="modal-title" id="saveAsTemplateModalLabel">
-                        <i class="fas fa-save me-2"></i>
-                        {{ __('general.save_as_template') }}
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title text-white" id="saveAsTemplateModalLabel">
+                        <i class="fas fa-layer-group me-2"></i>{{ __('general.save_as_template') }}
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="template_name" class="form-label">{{ __('general.template_name') }}</label>
-                        <input type="text" class="form-control" id="template_name" name="template_name" 
+                        <label for="template_name" class="form-label fw-semibold">{{ __('general.template_name') }}</label>
+                        <input type="text" class="form-control" id="template_name" name="template_name"
                                value="{{ $project->name }} - Template" required>
                     </div>
                     <div class="mb-3">
-                        <label for="template_description" class="form-label">{{ __('general.description') }}</label>
+                        <label for="template_description" class="form-label fw-semibold">{{ __('general.description') }}</label>
                         <textarea class="form-control" id="template_description" name="template_description" rows="3"
                                   placeholder="{{ __('general.template_description_placeholder') }}">{{ $project->description }}</textarea>
                     </div>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        {{ __('general.template_save_info') }}
+                    <div class="alert alert-info py-2 small mb-0">
+                        <i class="fas fa-info-circle me-1"></i>{{ __('general.template_save_info') }}
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                         {{ __('general.cancel') }}
                     </button>
                     <button type="submit" class="btn btn-primary" id="saveTemplateBtn">
-                        <i class="fas fa-save me-1"></i>
-                        {{ __('general.save_template') }}
+                        <i class="fas fa-save me-1"></i>{{ __('general.save_template') }}
                     </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+@endsection
 
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing save-as-template form');
-    
+document.addEventListener('DOMContentLoaded', function () {
+    // 1. Overview Bar Chart
+    const barCanvas = document.getElementById('detailsProgressChart');
+    if (barCanvas && typeof Chart !== 'undefined') {
+        const labels = @json($overviewLabels);
+        const actualData = @json($overviewActual);
+        const remainingData = @json($overviewRemaining);
+
+        new Chart(barCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'المنجز (%)',
+                        data: actualData,
+                        backgroundColor: 'rgba(33, 60, 122, 0.88)',
+                        borderColor: '#213c7a',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        maxBarThickness: 38
+                    },
+                    {
+                        label: 'المتبقي (%)',
+                        data: remainingData,
+                        backgroundColor: 'rgba(148, 163, 184, 0.35)',
+                        borderColor: '#94a3b8',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        maxBarThickness: 38
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%`
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { callback: v => v + '%' }
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. Distribution Doughnut Chart
+    const donutCanvas = document.getElementById('detailsDonutChart');
+    if (donutCanvas && typeof Chart !== 'undefined') {
+        new Chart(donutCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['مكتمل', 'قيد التنفيذ', 'لم يبدأ'],
+                datasets: [{
+                    data: [{{ $completedItemsCount }}, {{ $inProgressItemsCount }}, {{ $notStartedItemsCount }}],
+                    backgroundColor: ['#16803c', '#213c7a', '#cbd5e1'],
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '66%',
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+
+    // 3. Instant Work Items Table Search & Subproject Filter
+    const searchInput = document.getElementById('detailsItemSearch');
+    const subFilter = document.getElementById('detailsSubprojectFilter');
+    const rows = Array.from(document.querySelectorAll('#detailsItemsTable .details-item-row'));
+    const badge = document.getElementById('detailsItemsBadge');
+    const totalCount = rows.length;
+
+    function filterDetailsTable() {
+        const q = (searchInput?.value || '').toLowerCase().trim();
+        const sub = (subFilter?.value || '').toLowerCase().trim();
+        let visible = 0;
+
+        rows.forEach(row => {
+            const matchSub = !sub || (row.dataset.subproject || '') === sub;
+            const matchQ = !q || (row.dataset.search || '').includes(q);
+            const show = matchSub && matchQ;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+
+        if (badge) {
+            badge.textContent = visible === totalCount
+                ? `${totalCount} {{ __('general.items') }}`
+                : `${visible} / ${totalCount} {{ __('general.items') }}`;
+        }
+    }
+
+    searchInput?.addEventListener('input', filterDetailsTable);
+    subFilter?.addEventListener('change', filterDetailsTable);
+
+    // 4. Save As Template AJAX Form
     const form = document.getElementById('saveAsTemplateForm');
     const submitBtn = document.getElementById('saveTemplateBtn');
     const modal = document.getElementById('saveAsTemplateModal');
-    
-    console.log('Form element:', form);
-    console.log('Submit button:', submitBtn);
-    console.log('Modal element:', modal);
-    
+
     if (form) {
-        console.log('Form found, adding event listener');
-        
-        form.addEventListener('submit', function(e) {
-            e.preventDefault(); // Prevent default form submission
-            
-            console.log('Form submission started (AJAX)');
-            console.log('Form action:', form.action);
-            console.log('Form method:', form.method);
-            
-            // Validate form data
-            const templateName = document.getElementById('template_name').value;
-            if (!templateName || templateName.trim() === '') {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const templateName = document.getElementById('template_name')?.value?.trim();
+            if (!templateName) {
                 alert('{{ __('general.please_enter_template_name') }}');
-                return false;
+                return;
             }
-            
-            // Disable submit button to prevent double submission
+
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>{{ __('general.saving') }}';
             }
-            
-            // Prepare form data
-            const formData = new FormData(form);
-            console.log('Form data:');
-            for (let [key, value] of formData.entries()) {
-                console.log(key + ': ' + value);
-            }
-            
-            // Send AJAX request
+
             fetch(form.action, {
                 method: 'POST',
-                body: formData,
+                body: new FormData(form),
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json'
                 }
             })
-            .then(response => {
-                console.log('Response received:', response);
-                console.log('Response status:', response.status);
-                console.log('Response headers:', response.headers);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                return response.json();
+            .then(res => {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
             })
             .then(data => {
-                console.log('Response data:', data);
-                
                 if (data.success) {
-                    // Success - close modal and redirect or show success message
-                    const modalElement = bootstrap.Modal.getInstance(modal);
-                    if (modalElement) {
-                        modalElement.hide();
-                    }
-                    
-                    // Show success message
+                    bootstrap.Modal.getInstance(modal)?.hide();
                     alert('{{ __('general.template_saved_successfully') }}');
-                    
-                    // Redirect if URL provided
                     if (data.redirect_url) {
                         window.location.href = data.redirect_url;
-                    } else {
-                        // Reload page
-                        window.location.reload();
                     }
                 } else {
-                    // Show error message
-                    alert('{{ __('general.error_occurred_with_message') }}: ' + (data.message || '{{ __('general.unknown_error_occurred') }}'));
+                    alert(data.message || '{{ __('general.unknown_error_occurred') }}');
                 }
             })
-            .catch(error => {
-                console.error('Fetch error:', error);
-                alert('{{ __('general.connection_error') }}: ' + error.message);
+            .catch(err => {
+                alert('{{ __('general.connection_error') }}: ' + err.message);
             })
             .finally(() => {
-                // Re-enable submit button
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fas fa-save me-1"></i>{{ __('general.save_template') }}';
                 }
             });
         });
-        
-        // Add error handling for form submission
-        form.addEventListener('error', function(e) {
-            console.error('Form error:', e);
-            alert('{{ __('general.form_submission_error') }}');
-        });
-    } else {
-        console.error('Save as template form not found!');
     }
-    
-    // Add modal event listeners for debugging
-    if (modal) {
-        modal.addEventListener('show.bs.modal', function() {
-            console.log('Modal is being shown');
-        });
-        
-        modal.addEventListener('shown.bs.modal', function() {
-            console.log('Modal is fully shown');
-        });
-        
-        modal.addEventListener('hide.bs.modal', function() {
-            console.log('Modal is being hidden');
-        });
-    }
-    
-    // Global error handler
-    window.addEventListener('error', function(e) {
-        console.error('Global error:', e.error);
-        console.error('Error message:', e.message);
-        console.error('Error filename:', e.filename);
-        console.error('Error line:', e.lineno);
-    });
-    
-    // Check if user has permission
-    console.log('Checking user permissions...');
-    @can('projects-save-as-template')
-        console.log('User has projects-save-as-template permission');
-    @else
-        console.log('User does NOT have projects-save-as-template permission');
-    @endcan
 });
 </script>
-@endsection
+@endpush

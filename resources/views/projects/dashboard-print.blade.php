@@ -533,12 +533,7 @@ $isComponentVisible = function($component, $visibleComponents) {
                         <h5 class="fw-bold mb-3"><i class="fas fa-users me-2"></i>{{ __('general.team_members') }}</h5>
                         @forelse($project->employees as $employee)
                             @php
-                            $employeeProgress = $employee
-                                ->dailyProgress()
-                                ->whereHas('projectItem', function ($query) use ($project) {
-                                    $query->where('project_id', $project->id);
-                                })
-                                ->sum('quantity');
+                            $employeeProgress = (float) ($employee->project_progress_sum ?? 0);
                             @endphp
                             <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
                                 <div class="ms-3">
@@ -567,7 +562,7 @@ $isComponentVisible = function($component, $visibleComponents) {
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function () {
-    // â”€â”€ Ù…Ø³Ø§Ø¹Ø¯Ø©: Ø±Ø³Ù… Ø§Ù„Ù‚ÙŠÙ… ÙÙˆÙ‚ Ø§Ù„Ø£Ø¹Ù…Ø¯Ø© â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€ Ù…Ø³Ø§Ø¹Ø¯Ø©: Ø±Ø³Ù… Ø§Ù„Ù‚ÙŠÙ… Ù ÙˆÙ‚ Ø§Ù„Ø£Ø¹Ù…Ø¯Ø© â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function drawDataLabels(chart) {
         const ctx = chart.ctx;
         ctx.save();
@@ -724,7 +719,7 @@ $isComponentVisible = function($component, $visibleComponents) {
     // â”€â”€ ØªØ£Ø®ÙŠØ± Ø§Ù„Ø·Ø¨Ø§Ø¹Ø© Ø­ØªÙ‰ ØªÙ†ØªÙ‡ÙŠ Ø±Ø³Ù… Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù€ charts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Ù†Ø³ØªØ®Ø¯Ù… beforeAutoPrint hook Ø§Ù„Ù…Ø¯Ø¹ÙˆÙ… Ù…Ù† layouts/print.blade.php
     window.beforeAutoPrint = function () {
-        // Ù†Ø¹Ø·ÙŠ ÙˆÙ‚Øª ÙƒØ§ÙÙ Ù„Ù„Ù€ animation (700ms) Ø«Ù… Ù†Ø·Ø¨Ø¹
+        // Ù†Ø¹Ø·ÙŠ ÙˆÙ‚Øª ÙƒØ§Ù Ù  Ù„Ù„Ù€ animation (700ms) Ø«Ù… Ù†Ø·Ø¨Ø¹
         return new Promise(function (resolve) {
             setTimeout(resolve, 700);
         });

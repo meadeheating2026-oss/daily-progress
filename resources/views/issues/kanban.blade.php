@@ -5,7 +5,7 @@
         <a href="{{ route('dashboard') }}" class="text-muted text-decoration-none">{{ __('general.dashboard') }}</a>
     </li>
     <li class="breadcrumb-item">
-        <a href="{{ route('issues.index') }}" class="text-muted text-decoration-none">{{ __('general.issues') }}</a>
+        <a href="{{ route('issues.index', request()->only('project_id')) }}" class="text-muted text-decoration-none">{{ __('general.issues') }}</a>
     </li>
 @endsection
 

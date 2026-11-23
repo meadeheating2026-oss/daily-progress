@@ -21,7 +21,7 @@
                 <i class="fas fa-box-archive me-2 text-secondary"></i>
                 {{ __('general.archived_projects') }}
             </h5>
-            <span class="badge bg-secondary rounded-pill px-3 py-2">{{ $projects->count() }}</span>
+            <span class="badge bg-secondary rounded-pill px-3 py-2">{{ $projects->total() }}</span>
         </div>
         <div class="d-flex align-items-center gap-2">
             <a href="{{ route('projects.index') }}" class="btn btn-outline-primary">
@@ -35,7 +35,7 @@
         </div>
     </div>
 
-    @if($projects->isEmpty())
+    @if($projects->isEmpty() && !request()->hasAny(['search', 'status', 'type', 'client']))
         <div class="card border-0 rounded-4 shadow-sm">
             <div class="card-body text-center py-5">
                 <div class="mb-3">
@@ -54,90 +54,87 @@
         {{-- Filters --}}
         <div class="card shadow-sm border-0 mb-4" style="border-radius: 20px;">
             <div class="card-body p-4">
-                <div class="row g-3 align-items-end">
-                    {{-- Search --}}
-                    <div class="col-lg-4 col-md-6 col-sm-12">
-                        <label class="form-label text-muted small mb-2">
-                            <i class="fas fa-search me-2"></i>{{ __('general.search') }}
-                        </label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light border-0" style="border-radius: 12px 0 0 12px;">
-                                <i class="fas fa-search text-muted"></i>
-                            </span>
-                            <input type="text" 
-                                   id="projectSearch" 
-                                   class="form-control border-0 bg-light" 
-                                   placeholder="{{ __('general.search_by_name_or_client') }}"
-                                   style="border-radius: 0 12px 12px 0;">
+                <form method="GET"
+                      action="{{ route('projects.archived') }}"
+                      id="archivedFilterForm"
+                      data-server-filter="{{ ($projects->hasPages() || request()->hasAny(['search', 'status', 'type', 'client'])) ? '1' : '0' }}">
+                    <div class="row g-3 align-items-end">
+                        {{-- Search --}}
+                        <div class="col-lg-4 col-md-6 col-sm-12">
+                            <label class="form-label text-muted small mb-2">
+                                <i class="fas fa-search me-2"></i>{{ __('general.search') }}
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-0" style="border-radius: 12px 0 0 12px;">
+                                    <i class="fas fa-search text-muted"></i>
+                                </span>
+                                <input type="text" 
+                                       id="projectSearch" 
+                                       name="search"
+                                       value="{{ request('search') }}"
+                                       class="form-control border-0 bg-light" 
+                                       placeholder="{{ __('general.search_by_name_or_client') }}"
+                                       style="border-radius: 0 12px 12px 0;">
+                            </div>
+                        </div>
+
+                        {{-- Status Filter --}}
+                        <div class="col-lg-2 col-md-6 col-sm-12">
+                            <label class="form-label text-muted small mb-2">
+                                <i class="fas fa-filter me-2"></i>{{ __('general.status') }}
+                            </label>
+                            <select id="projectStatusFilter" name="status" class="form-select border-0 bg-light" style="border-radius: 12px;">
+                                <option value="all">{{ __('general.all_statuses') }}</option>
+                                <option value="active" @selected(request('status') === 'active')>{{ __('general.active') }}</option>
+                                <option value="completed" @selected(request('status') === 'completed')>{{ __('general.completed') }}</option>
+                                <option value="pending" @selected(request('status') === 'pending')>{{ __('general.pending') }}</option>
+                            </select>
+                        </div>
+
+                        {{-- Project Type Filter --}}
+                        <div class="col-lg-3 col-md-6 col-sm-12">
+                            <label class="form-label text-muted small mb-2">
+                                <i class="fas fa-tag me-2"></i>{{ __('general.type_of_project') }}
+                            </label>
+                            <select id="projectTypeFilter" name="type" class="form-select border-0 bg-light" style="border-radius: 12px;">
+                                <option value="all">{{ __('general.all_types') }}</option>
+                                @foreach(($filterTypes ?? collect()) as $type)
+                                    <option value="{{ $type->name }}" @selected(request('type') == $type->name || request('type') == $type->id)>{{ $type->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        {{-- Client Filter --}}
+                        <div class="col-lg-2 col-md-6 col-sm-12">
+                            <label class="form-label text-muted small mb-2">
+                                <i class="fas fa-building me-2"></i>{{ __('projects.client') }}
+                            </label>
+                            <select id="projectClientFilter" name="client" class="form-select border-0 bg-light" style="border-radius: 12px;">
+                                <option value="all">{{ __('general.all_clients') }}</option>
+                                @foreach(($filterClients ?? collect()) as $client)
+                                    <option value="{{ $client->name }}" @selected(request('client') == $client->name || request('client') == $client->id)>{{ $client->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        {{-- Clear Filters --}}
+                        <div class="col-lg-1 col-md-6 col-sm-12">
+                            <button type="button" 
+                                    id="clearFilters" 
+                                    class="btn btn-outline-secondary w-100" 
+                                    title="{{ __('general.clear_filters') }}"
+                                    style="border-radius: 12px;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <div class="text-center mt-2">
+                                <small class="text-muted">
+                                    <span id="filterResults">{{ $projects->total() }}</span> 
+                                    <span>{{ __('general.results') }}</span>
+                                </small>
+                            </div>
                         </div>
                     </div>
-
-                    {{-- Status Filter --}}
-                    <div class="col-lg-2 col-md-6 col-sm-12">
-                        <label class="form-label text-muted small mb-2">
-                            <i class="fas fa-filter me-2"></i>{{ __('general.status') }}
-                        </label>
-                        <select id="projectStatusFilter" class="form-select border-0 bg-light" style="border-radius: 12px;">
-                            <option value="all">{{ __('general.all_statuses') }}</option>
-                            <option value="active">{{ __('general.active') }}</option>
-                            <option value="completed">{{ __('general.completed') }}</option>
-                            <option value="pending">{{ __('general.pending') }}</option>
-                        </select>
-                    </div>
-
-                    {{-- Project Type Filter --}}
-                    <div class="col-lg-3 col-md-6 col-sm-12">
-                        <label class="form-label text-muted small mb-2">
-                            <i class="fas fa-tag me-2"></i>{{ __('general.type_of_project') }}
-                        </label>
-                        <select id="projectTypeFilter" class="form-select border-0 bg-light" style="border-radius: 12px;">
-                            <option value="all">{{ __('general.all_types') }}</option>
-                            @php
-                                $uniqueTypes = $projects->pluck('type')->filter()->unique('id');
-                            @endphp
-                            @foreach($uniqueTypes as $type)
-                                @if($type)
-                                    <option value="{{ $type->name }}">{{ $type->name }}</option>
-                                @endif
-                            @endforeach
-                        </select>
-                    </div>
-
-                    {{-- Client Filter --}}
-                    <div class="col-lg-2 col-md-6 col-sm-12">
-                        <label class="form-label text-muted small mb-2">
-                            <i class="fas fa-building me-2"></i>{{ __('projects.client') }}
-                        </label>
-                        <select id="projectClientFilter" class="form-select border-0 bg-light" style="border-radius: 12px;">
-                            <option value="all">{{ __('general.all_clients') }}</option>
-                            @php
-                                $uniqueClients = $projects->pluck('client')->filter()->unique('id');
-                            @endphp
-                            @foreach($uniqueClients as $client)
-                                @if($client)
-                                    <option value="{{ $client->name }}">{{ $client->name }}</option>
-                                @endif
-                            @endforeach
-                        </select>
-                    </div>
-
-                    {{-- Clear Filters --}}
-                    <div class="col-lg-1 col-md-6 col-sm-12">
-                        <button type="button" 
-                                id="clearFilters" 
-                                class="btn btn-outline-secondary w-100" 
-                                title="{{ __('general.clear_filters') }}"
-                                style="border-radius: 12px;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                        <div class="text-center mt-2">
-                            <small class="text-muted">
-                                <span id="filterResults">{{ $projects->count() }}</span> 
-                                <span>{{ __('general.results') }}</span>
-                            </small>
-                        </div>
-                    </div>
-                </div>
+                </form>
             </div>
         </div>
 
@@ -346,7 +343,7 @@
 
         {{-- Projects Grid --}}
         <div class="row g-4" id="projectsGrid">
-            @foreach($projects as $project)
+            @forelse($projects as $project)
                 @php
                     $subprojectNamesWithItems = $project->items
                         ->pluck('subproject_name')
@@ -532,8 +529,22 @@
                         </div>
                     </div>
                 </div>
-            @endforeach
+            @empty
+                <div class="col-12 text-center py-5">
+                    <div class="alert alert-info border-0 shadow-sm" style="border-radius: 20px; padding: 2rem;">
+                        <i class="fas fa-search fa-3x mb-3 text-muted"></i>
+                        <h5 class="text-muted mb-2">لا توجد مشاريع مطابقة للبحث</h5>
+                        <p class="text-muted mb-0">جرب البحث بكلمات مختلفة أو غير الفلاتر</p>
+                    </div>
+                </div>
+            @endforelse
         </div>
+
+        @if($projects->hasPages())
+            <div class="d-flex justify-content-center mt-4 mb-2">
+                {{ $projects->links('pagination::bootstrap-5') }}
+            </div>
+        @endif
     @endif
 
     {{-- Project Details Modal --}}
@@ -811,61 +822,99 @@
                 });
             });
 
-            // Filter logic
+            // Filter logic (hybrid: 0ms DOM filter for <=1 page, SQL server filter for 10,000+ projects)
+            const filterForm = document.getElementById('archivedFilterForm');
             const searchInput = document.getElementById('projectSearch');
             const statusFilter = document.getElementById('projectStatusFilter');
             const typeFilter = document.getElementById('projectTypeFilter');
             const clientFilter = document.getElementById('projectClientFilter');
             const clearBtn = document.getElementById('clearFilters');
             const resultsSpan = document.getElementById('filterResults');
+            const useServerFilter = filterForm && filterForm.dataset.serverFilter === '1';
 
-            function applyFilters() {
-                const searchVal = (searchInput ? searchInput.value : '').toLowerCase().trim();
-                const statusVal = (statusFilter ? statusFilter.value : 'all');
-                const typeVal = (typeFilter ? typeFilter.value : 'all');
-                const clientVal = (clientFilter ? clientFilter.value : 'all');
-
-                let visibleCount = 0;
-                document.querySelectorAll('#projectsGrid .col-lg-4').forEach(col => {
-                    const card = col.querySelector('.project-card');
-                    if (!card) return;
-
-                    const name = (card.dataset.projectName || '').toLowerCase();
-                    const client = (card.dataset.projectClient || '').toLowerCase();
-                    const status = (card.dataset.projectStatus || '');
-                    const type = (card.dataset.projectType || '');
-
-                    const matchSearch = !searchVal || name.includes(searchVal) || client.includes(searchVal);
-                    const matchStatus = statusVal === 'all' || status === statusVal;
-                    const matchType = typeVal === 'all' || type === typeVal;
-                    const matchClient = clientVal === 'all' || card.dataset.projectClient === clientVal;
-
-                    if (matchSearch && matchStatus && matchType && matchClient) {
-                        col.style.display = '';
-                        visibleCount++;
-                    } else {
-                        col.style.display = 'none';
-                    }
-                });
-
-                if (resultsSpan) {
-                    resultsSpan.textContent = visibleCount;
-                }
+            function submitArchivedServerForm() {
+                if (!filterForm) return;
+                const params = new URLSearchParams();
+                if (searchInput && searchInput.value.trim()) params.set('search', searchInput.value.trim());
+                if (statusFilter && statusFilter.value !== 'all') params.set('status', statusFilter.value);
+                if (typeFilter && typeFilter.value !== 'all') params.set('type', typeFilter.value);
+                if (clientFilter && clientFilter.value !== 'all') params.set('client', clientFilter.value);
+                const qs = params.toString();
+                window.location.href = qs ? `${filterForm.action}?${qs}` : filterForm.action;
             }
 
-            if (searchInput) searchInput.addEventListener('input', applyFilters);
-            if (statusFilter) statusFilter.addEventListener('change', applyFilters);
-            if (typeFilter) typeFilter.addEventListener('change', applyFilters);
-            if (clientFilter) clientFilter.addEventListener('change', applyFilters);
-
-            if (clearBtn) {
-                clearBtn.addEventListener('click', function() {
-                    if (searchInput) searchInput.value = '';
-                    if (statusFilter) statusFilter.value = 'all';
-                    if (typeFilter) typeFilter.value = 'all';
-                    if (clientFilter) clientFilter.value = 'all';
-                    applyFilters();
+            if (filterForm) {
+                filterForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    submitArchivedServerForm();
                 });
+            }
+
+            if (useServerFilter) {
+                let debounceTimer;
+                if (searchInput) {
+                    searchInput.addEventListener('input', function() {
+                        clearTimeout(debounceTimer);
+                        debounceTimer = setTimeout(submitArchivedServerForm, 350);
+                    });
+                }
+                if (statusFilter) statusFilter.addEventListener('change', submitArchivedServerForm);
+                if (typeFilter) typeFilter.addEventListener('change', submitArchivedServerForm);
+                if (clientFilter) clientFilter.addEventListener('change', submitArchivedServerForm);
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', function() {
+                        window.location.href = filterForm.action;
+                    });
+                }
+            } else {
+                function applyFilters() {
+                    const searchVal = (searchInput ? searchInput.value : '').toLowerCase().trim();
+                    const statusVal = (statusFilter ? statusFilter.value : 'all');
+                    const typeVal = (typeFilter ? typeFilter.value : 'all');
+                    const clientVal = (clientFilter ? clientFilter.value : 'all');
+
+                    let visibleCount = 0;
+                    document.querySelectorAll('#projectsGrid .col-lg-4').forEach(col => {
+                        const card = col.querySelector('.project-card');
+                        if (!card) return;
+
+                        const name = (card.dataset.projectName || '').toLowerCase();
+                        const client = (card.dataset.projectClient || '').toLowerCase();
+                        const status = (card.dataset.projectStatus || '');
+                        const type = (card.dataset.projectType || '');
+
+                        const matchSearch = !searchVal || name.includes(searchVal) || client.includes(searchVal);
+                        const matchStatus = statusVal === 'all' || status === statusVal;
+                        const matchType = typeVal === 'all' || type === typeVal;
+                        const matchClient = clientVal === 'all' || card.dataset.projectClient === clientVal;
+
+                        if (matchSearch && matchStatus && matchType && matchClient) {
+                            col.style.display = '';
+                            visibleCount++;
+                        } else {
+                            col.style.display = 'none';
+                        }
+                    });
+
+                    if (resultsSpan) {
+                        resultsSpan.textContent = visibleCount;
+                    }
+                }
+
+                if (searchInput) searchInput.addEventListener('input', applyFilters);
+                if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+                if (typeFilter) typeFilter.addEventListener('change', applyFilters);
+                if (clientFilter) clientFilter.addEventListener('change', applyFilters);
+
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', function() {
+                        if (searchInput) searchInput.value = '';
+                        if (statusFilter) statusFilter.value = 'all';
+                        if (typeFilter) typeFilter.value = 'all';
+                        if (clientFilter) clientFilter.value = 'all';
+                        applyFilters();
+                    });
+                }
             }
         });
     </script>
