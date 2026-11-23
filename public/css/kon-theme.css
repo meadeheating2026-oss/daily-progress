@@ -825,12 +825,23 @@ html.dark-mode .kon-nav-a[aria-current="page"] {
 .btn-outline-primary {
     color: var(--brand) !important;
     border-color: color-mix(in srgb, var(--brand) 45%, var(--line-2)) !important;
-    background: transparent;
+    background: var(--surface);
 }
 
-.btn-outline-primary:hover {
+.btn-outline-primary:hover,
+.btn-outline-primary.active,
+.btn-outline-primary:active,
+.btn-check:checked + .btn-outline-primary,
+.show > .btn-outline-primary.dropdown-toggle {
     background-color: var(--brand) !important;
     border-color: var(--brand) !important;
+    color: var(--brand-ink) !important;
+}
+
+.btn-outline-primary:hover i,
+.btn-outline-primary.active i,
+.btn-outline-primary:active i,
+.btn-check:checked + .btn-outline-primary i {
     color: var(--brand-ink) !important;
 }
 
@@ -844,13 +855,30 @@ html.dark-mode .kon-nav-a[aria-current="page"] {
     background: var(--surface);
 }
 
-.btn-outline-secondary:hover {
+.btn-outline-secondary:hover,
+.btn-outline-secondary.active,
+.btn-outline-secondary:active,
+.btn-check:checked + .btn-outline-secondary {
     background: var(--hover);
     border-color: var(--faint);
     color: var(--ink);
 }
 
 .btn-success {
+    background-color: var(--ok) !important;
+    border-color: var(--ok) !important;
+    color: #fff !important;
+}
+
+.btn-outline-success {
+    color: var(--ok) !important;
+    border-color: color-mix(in srgb, var(--ok) 40%, transparent) !important;
+    background: var(--surface);
+}
+
+.btn-outline-success:hover,
+.btn-outline-success.active,
+.btn-outline-success:active {
     background-color: var(--ok) !important;
     border-color: var(--ok) !important;
     color: #fff !important;
@@ -867,7 +895,9 @@ html.dark-mode .kon-nav-a[aria-current="page"] {
     border-color: color-mix(in srgb, var(--bad) 38%, transparent) !important;
 }
 
-.btn-outline-danger:hover {
+.btn-outline-danger:hover,
+.btn-outline-danger.active,
+.btn-outline-danger:active {
     background-color: var(--bad-soft) !important;
     color: var(--bad) !important;
 }
@@ -883,7 +913,9 @@ html.dark-mode .kon-nav-a[aria-current="page"] {
     border-color: color-mix(in srgb, var(--warn) 42%, transparent) !important;
 }
 
-.btn-outline-warning:hover {
+.btn-outline-warning:hover,
+.btn-outline-warning.active,
+.btn-outline-warning:active {
     background-color: var(--warn-soft) !important;
     color: var(--warn) !important;
 }
@@ -1513,13 +1545,25 @@ table td :is(.btn, .action-btn):has(.fa-trash-alt):hover,
     color: #ffffff !important;
 }
 
+.modal-header .badge.bg-light {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.38) !important;
+    font-weight: 700 !important;
+}
+
 .modal-header.bg-primary .btn-close,
 .modal-header.bg-success .btn-close,
 .modal-header.bg-danger .btn-close,
 .modal-header.bg-warning .btn-close,
 .modal-header.bg-info .btn-close,
 .modal-header.bg-dark .btn-close {
-    filter: invert(1) grayscale(100%) brightness(200%);
+    filter: invert(1) grayscale(100%) brightness(220%) !important;
+    opacity: 0.92 !important;
+}
+
+.modal-header .btn-close:hover {
+    opacity: 1 !important;
 }
 
 .modal-footer {
@@ -2158,4 +2202,797 @@ html.dark-mode .kon-auth-r {
     .progress-table tbody td.progress-end-date-cell { background-color: #f7f8fb !important; }
     .progress-table tbody td.above-expected { background-color: #e3f3eb !important; color: #1b7f55 !important; }
     .progress-table tbody td.below-expected { background-color: #fbe8e5 !important; color: #bb3428 !important; }
+}
+
+/* ==========================================================================
+   Project Form — Selected Items, 16-Col Exact Alignment, Multi-Drag & Modals
+   ========================================================================== */
+#selected-items-table,
+.category-items-table {
+    table-layout: fixed !important;
+    width: 2210px !important;
+    min-width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 0 !important;
+}
+
+#selected-items-table > thead > tr > th {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    background-color: #1e3363 !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-bottom: 2px solid #15254a !important;
+    font-weight: 600 !important;
+    font-size: 12.5px !important;
+    padding: 10px 8px !important;
+    vertical-align: middle !important;
+}
+
+#selected-items-table > thead > tr > th i {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+#selected-items-table > tbody > tr > td,
+.category-items-table > tbody > tr > td {
+    padding: 8px 8px !important;
+    vertical-align: middle !important;
+    box-sizing: border-box !important;
+}
+
+#selected-items-table > tbody > tr.category-group-row > td {
+    padding: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+}
+
+#selected-items-table .category-group {
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 2px solid var(--line-2) !important;
+    border-radius: 0 !important;
+    margin-bottom: 8px !important;
+}
+
+/* Crisp visible checkboxes even on tinted/selected rows */
+#selected-items-table .form-check-input {
+    width: 17px;
+    height: 17px;
+    border: 1.75px solid #64748b !important;
+    background-color: #ffffff;
+    cursor: pointer;
+}
+
+#selected-items-table > thead .form-check-input {
+    border: 1.75px solid rgba(255, 255, 255, 0.85) !important;
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+#selected-items-table .form-check-input:checked,
+#selected-items-table .form-check-input:indeterminate {
+    background-color: var(--brand) !important;
+    border-color: var(--brand) !important;
+}
+
+#selected-items-table > thead .form-check-input:checked,
+#selected-items-table > thead .form-check-input:indeterminate {
+    background-color: #10b981 !important;
+    border-color: #10b981 !important;
+}
+
+#selected-items-table tr.item-row-selected > td {
+    background-color: color-mix(in srgb, var(--brand) 9%, var(--surface)) !important;
+}
+
+#selected-items-table tr.group-row-selected .category-header {
+    box-shadow: inset 0 0 0 2px #10b981 !important;
+}
+
+#selected-items-table tr.multi-drag-companion {
+    opacity: 0.32;
+}
+
+#selected-items-table tr.multi-drag-anchor {
+    outline: 2px solid var(--brand) !important;
+    box-shadow: 0 8px 24px rgba(33, 60, 122, 0.22) !important;
+}
+
+.multi-drag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--brand);
+    color: #ffffff;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    margin-inline-start: 6px;
+    box-shadow: 0 2px 8px rgba(33, 60, 122, 0.35);
+}
+
+#selected-items-table .row-number-badge {
+    min-width: 30px;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 5px 8px;
+    border-radius: 7px;
+    background-color: var(--brand-soft) !important;
+    color: var(--brand) !important;
+    border: 1px solid color-mix(in srgb, var(--brand) 26%, transparent);
+}
+
+html.dark-mode #selected-items-table .row-number-badge {
+    background-color: rgba(79, 140, 255, 0.18) !important;
+    color: #9dc0ff !important;
+}
+
+.category-group .category-header {
+    background: linear-gradient(135deg, #213c7a 0%, #2d4f9c 100%) !important;
+    color: #ffffff !important;
+}
+
+.category-group .category-header.collapsed {
+    background: linear-gradient(135deg, #2b394f 0%, #3d4f6b 100%) !important;
+    color: #ffffff !important;
+}
+
+.category-group .category-header:hover {
+    filter: brightness(1.06);
+}
+
+.category-group .category-header input.form-control {
+    background-color: rgba(255, 255, 255, 0.97) !important;
+    color: #0f172a !important;
+    border: 1px solid rgba(255, 255, 255, 0.65) !important;
+    font-weight: 700 !important;
+    border-radius: 7px !important;
+    height: 30px;
+    padding: 2px 8px !important;
+    font-size: 12.5px !important;
+}
+
+.category-group .category-header .group-header-checkbox {
+    width: 18px !important;
+    height: 18px !important;
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.9) !important;
+    background-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+.category-group .category-header .group-header-checkbox:checked {
+    background-color: #10b981 !important;
+    border-color: #10b981 !important;
+}
+
+/* Nav Pills & jQuery Work-Item Modal High-Contrast Styling */
+.nav-pills {
+    background-color: var(--surface-2) !important;
+    border: 1px solid var(--line-2) !important;
+    border-radius: 10px !important;
+    padding: 5px !important;
+}
+
+.nav-pills .nav-link {
+    color: var(--ink-2) !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    padding: 9px 14px !important;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-pills .nav-link:hover:not(.active) {
+    background-color: var(--hover) !important;
+    color: var(--brand) !important;
+}
+
+.nav-pills .nav-link.active {
+    background-color: var(--brand) !important;
+    color: #ffffff !important;
+    box-shadow: 0 3px 10px rgba(33, 60, 122, 0.25) !important;
+}
+
+.nav-pills .nav-link.active i {
+    color: #ffffff !important;
+}
+
+.kon-workitem-list {
+    max-height: 340px;
+    overflow-y: auto;
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.kon-workitem-option {
+    cursor: pointer;
+    padding: 11px 15px;
+    border-bottom: 1px solid var(--line);
+    transition: background 0.14s ease, border-color 0.14s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    color: var(--ink);
+}
+
+.kon-workitem-option:last-child {
+    border-bottom: 0;
+}
+
+.kon-workitem-option .kon-wi-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.kon-workitem-option .kon-wi-meta {
+    font-size: 12.5px;
+    color: var(--ink-2);
+    font-weight: 500;
+}
+
+.kon-workitem-option .kon-wi-unit {
+    background-color: var(--brand-soft) !important;
+    color: var(--brand) !important;
+    border: 1px solid color-mix(in srgb, var(--brand) 28%, transparent) !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    padding: 4px 11px !important;
+    border-radius: 999px !important;
+}
+
+.kon-workitem-option:hover {
+    background: var(--hover);
+}
+
+.kon-workitem-option.selected {
+    background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+    border-inline-start: 4px solid var(--brand);
+}
+
+.kon-workitem-option.selected .kon-wi-title {
+    color: var(--brand);
+}
+
+.modal-footer .btn-outline-secondary {
+    border-color: #94a3b8 !important;
+    color: var(--ink) !important;
+    font-weight: 600 !important;
+}
+
+.modal-footer .btn-outline-secondary:hover {
+    background-color: var(--surface-3) !important;
+}
+
+/* ==========================================================================
+   Persistent Click-to-Navigate Toast Stack & Target Pulse Highlight
+   ========================================================================== */
+.kon-toast-stack {
+    position: fixed;
+    top: 70px;
+    inset-inline: 24px;
+    z-index: 1090;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.kon-toast-item {
+    pointer-events: auto;
+    width: min(880px, 100%);
+    margin: 0 !important;
+    padding: 12px 16px !important;
+    border-radius: 12px !important;
+    display: flex !important;
+    align-items: flex-start;
+    gap: 12px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16) !important;
+    border-width: 1.5px !important;
+    transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kon-toast-item.alert-danger {
+    background-color: #fef2f2 !important;
+    border-color: #f87171 !important;
+    color: #991b1b !important;
+}
+
+.kon-toast-item.alert-warning {
+    background-color: #fffbeb !important;
+    border-color: #fbbf24 !important;
+    color: #92400e !important;
+}
+
+.kon-toast-item.alert-success {
+    background-color: #ecfdf5 !important;
+    border-color: #34d399 !important;
+    color: #065f46 !important;
+}
+
+.kon-toast-item.alert-info {
+    background-color: #eff6ff !important;
+    border-color: #93c5fd !important;
+    color: #1e3a8a !important;
+}
+
+html.dark-mode .kon-toast-item.alert-danger {
+    background-color: #3b1219 !important;
+    border-color: #dc2626 !important;
+    color: #fecaca !important;
+}
+
+html.dark-mode .kon-toast-item.alert-warning {
+    background-color: #3b280c !important;
+    border-color: #d97706 !important;
+    color: #fde68a !important;
+}
+
+.kon-toast-item.is-clickable {
+    cursor: pointer;
+}
+
+.kon-toast-item.is-clickable:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.22) !important;
+}
+
+.kon-toast-fadeout {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+.kon-toast-icon {
+    font-size: 18px;
+    line-height: 1.35;
+    flex-shrink: 0;
+}
+
+.kon-toast-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.kon-toast-msg {
+    font-weight: 600;
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+
+.kon-toast-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.kon-toast-chip {
+    border: 1px solid currentColor;
+    background: rgba(255, 255, 255, 0.72);
+    color: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: background 0.14s ease, transform 0.12s ease;
+}
+
+html.dark-mode .kon-toast-chip {
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.kon-toast-chip:hover {
+    background: #ffffff;
+    transform: scale(1.03);
+}
+
+.kon-toast-arrow {
+    font-weight: 700;
+    opacity: 0.7;
+    font-size: 12px;
+}
+
+.kon-toast-goto {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    opacity: 0.88;
+    text-decoration: underline;
+}
+
+.kon-toast-close {
+    border: 0;
+    background: rgba(0, 0, 0, 0.06);
+    color: inherit;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.kon-toast-close:hover {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+@keyframes konAlertPulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.55); }
+    50% { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0.18); }
+}
+
+.kon-alert-target-pulse {
+    outline: 2.5px solid #dc2626 !important;
+    animation: konAlertPulse 0.9s ease-in-out 4;
+    background-color: rgba(254, 226, 226, 0.55) !important;
+}
+
+tr.kon-alert-target-pulse > td {
+    background-color: rgba(254, 226, 226, 0.65) !important;
+}
+
+/* ==========================================================================
+   Sticky Unified KON Project Context & Quick-Actions Sub-Bar
+   ========================================================================== */
+.kon-project-bar {
+    position: sticky;
+    top: 58px;
+    z-index: 1020;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    padding: 9px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 14px -8px rgba(15, 23, 42, 0.08);
+}
+
+.kon-project-bar-id {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.kon-project-bar-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    display: inline-grid;
+    place-items: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.kon-project-bar-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink);
+    max-width: 280px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kon-project-bar-client {
+    font-size: 11.5px;
+    color: var(--muted);
+    max-width: 240px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kon-project-bar-nav {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.kon-proj-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+    background: transparent;
+    border: 1px solid transparent;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.kon-proj-tab i {
+    font-size: 12.5px;
+    color: var(--muted);
+    transition: color 0.14s ease;
+}
+
+.kon-proj-tab:hover {
+    background: var(--hover);
+    color: var(--brand);
+    border-color: var(--line);
+}
+
+.kon-proj-tab:hover i {
+    color: var(--brand);
+}
+
+.kon-proj-tab.active {
+    background: var(--brand) !important;
+    color: #ffffff !important;
+    border-color: var(--brand) !important;
+    box-shadow: 0 2px 8px rgba(33, 60, 122, 0.24);
+}
+
+.kon-proj-tab.active i {
+    color: #ffffff !important;
+}
+
+.kon-proj-tab-danger {
+    color: var(--bad) !important;
+    border-color: color-mix(in srgb, var(--bad) 26%, transparent);
+}
+
+.kon-proj-tab-danger i {
+    color: var(--bad) !important;
+}
+
+.kon-proj-tab-danger:hover {
+    background: var(--bad-soft) !important;
+    border-color: color-mix(in srgb, var(--bad) 45%, transparent) !important;
+}
+
+/* ==========================================================================
+   Project Dashboard KON Harmonization & Unclipped Progress Bars
+   ========================================================================== */
+.project-dashboard {
+    background: transparent !important;
+    min-height: auto !important;
+    font-family: var(--font) !important;
+}
+
+.project-dashboard .dashboard-container {
+    margin: 0 !important;
+    border-radius: var(--r) !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    overflow: visible !important;
+}
+
+.project-dashboard .dashboard-header {
+    background: linear-gradient(135deg, #1b3266 0%, #2a4b96 100%) !important;
+    color: #ffffff !important;
+    border-radius: var(--r) !important;
+    padding: 22px 26px !important;
+    margin-bottom: 18px !important;
+    box-shadow: var(--shadow-1) !important;
+}
+
+.project-dashboard .dashboard-header h1,
+.project-dashboard .dashboard-header p,
+.project-dashboard .dashboard-header small,
+.project-dashboard .dashboard-header i:not(.status-badge i) {
+    color: #ffffff !important;
+}
+
+.project-dashboard .stat-card {
+    background: var(--surface) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--r) !important;
+    box-shadow: var(--shadow-1) !important;
+    padding: 20px !important;
+}
+
+.project-dashboard .stat-card:hover {
+    transform: none !important;
+    box-shadow: var(--shadow-2) !important;
+}
+
+/* Unclipped high-contrast progress track with readable label at ANY percentage (0%..100%) */
+.kon-progress-track {
+    position: relative;
+    height: 24px;
+    background-color: var(--surface-3) !important;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.kon-progress-track .kon-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.5s ease;
+}
+
+.kon-progress-track .kon-progress-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.kon-progress-track .kon-progress-label.on-light {
+    color: var(--ink) !important;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+}
+
+.kon-progress-track .kon-progress-label.on-dark {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* =========================================================================
+   Bootstrap bg-opacity-10 Fix (Prevents solid navy-on-navy invisible icons)
+   ========================================================================= */
+.bg-primary.bg-opacity-10 {
+    background-color: rgba(33, 60, 122, 0.10) !important;
+    color: var(--brand, #213c7a) !important;
+}
+.bg-success.bg-opacity-10 {
+    background-color: rgba(22, 128, 60, 0.10) !important;
+    color: var(--ok, #16803c) !important;
+}
+.bg-warning.bg-opacity-10 {
+    background-color: rgba(180, 83, 9, 0.10) !important;
+    color: var(--warn, #b45309) !important;
+}
+.bg-danger.bg-opacity-10 {
+    background-color: rgba(185, 28, 28, 0.10) !important;
+    color: var(--bad, #b91c1c) !important;
+}
+.bg-info.bg-opacity-10 {
+    background-color: rgba(33, 60, 122, 0.08) !important;
+    color: var(--brand, #213c7a) !important;
+}
+.bg-secondary.bg-opacity-10 {
+    background-color: rgba(71, 85, 105, 0.10) !important;
+    color: #334155 !important;
+}
+
+.bg-primary.bg-opacity-10 i,
+.bg-success.bg-opacity-10 i,
+.bg-warning.bg-opacity-10 i,
+.bg-danger.bg-opacity-10 i,
+.bg-info.bg-opacity-10 i,
+.bg-secondary.bg-opacity-10 i {
+    color: inherit !important;
+}
+
+/* =========================================================================
+   Customize View Modal (#componentsModal) — KON Work Plan Harmonization
+   ========================================================================= */
+#componentsModal .kon-cust-header-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.16) !important;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff !important;
+    flex-shrink: 0;
+}
+
+#componentsModal .customize-sections-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+@media (max-width: 767.98px) {
+    #componentsModal .customize-sections-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+#componentsModal .customize-item {
+    background: var(--surface, #ffffff) !important;
+    border: 1px solid var(--line, #e2e8f0) !important;
+    border-radius: 12px !important;
+    padding: 12px 14px !important;
+    margin: 0 !important;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, background-color 0.16s ease;
+}
+
+#componentsModal .customize-item:hover {
+    border-color: rgba(33, 60, 122, 0.35) !important;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06) !important;
+}
+
+#componentsModal .customize-item.is-off {
+    background: var(--surface-2, #f8fafc) !important;
+    opacity: 0.65;
+}
+
+#componentsModal .customize-item .drag-handle {
+    color: #94a3b8 !important;
+    cursor: grab;
+    padding: 4px;
+    display: inline-flex;
+    align-items: center;
+}
+
+#componentsModal .customize-item:hover .drag-handle {
+    color: var(--brand, #213c7a) !important;
+}
+
+#componentsModal .section-icon-badge {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 10px !important;
+    background: rgba(33, 60, 122, 0.09) !important;
+    border: 1px solid rgba(33, 60, 122, 0.18) !important;
+    color: var(--brand, #213c7a) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1rem !important;
+    flex-shrink: 0;
+}
+
+#componentsModal .section-icon-badge.badge-emerald {
+    background: rgba(22, 128, 60, 0.09) !important;
+    border-color: rgba(22, 128, 60, 0.20) !important;
+    color: var(--ok, #16803c) !important;
+}
+
+#componentsModal .section-icon-badge.badge-slate {
+    background: rgba(71, 85, 105, 0.10) !important;
+    border-color: rgba(71, 85, 105, 0.20) !important;
+    color: #334155 !important;
+}
+
+#componentsModal .customize-item.is-off .section-icon-badge {
+    background: rgba(148, 163, 184, 0.14) !important;
+    border-color: rgba(148, 163, 184, 0.25) !important;
+    color: #64748b !important;
+}
+
+#componentsModal .section-icon-badge i {
+    color: inherit !important;
+}
+
+#componentsModal .customize-item .section-title {
+    color: var(--ink, #0f172a) !important;
+    font-size: 0.92rem !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+#componentsModal .customize-item .section-title::after {
+    display: none !important;
 }
